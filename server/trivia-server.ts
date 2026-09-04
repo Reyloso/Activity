@@ -88,6 +88,7 @@ function emitPlayersUpdate(io: Server<ClientToServerEvents, ServerToClientEvents
     players: [...room.players.values()].map((p) => ({ userId: p.userId, name: p.name })),
     hostName: room.players.get(room.hostUserId)?.name ?? "Anfitrión",
     triviaTitle: room.triviaTitle,
+    questionCount: room.questions.length,
   });
 }
 
@@ -96,15 +97,16 @@ function sendStateTo(socket: Socket<ClientToServerEvents, ServerToClientEvents>,
     players: [...room.players.values()].map((p) => ({ userId: p.userId, name: p.name })),
     hostName: room.players.get(room.hostUserId)?.name ?? "Anfitrión",
     triviaTitle: room.triviaTitle,
+    questionCount: room.questions.length,
   });
 
   if (room.status === "question") {
     socket.emit("room:question", publicQuestionPayload(room));
     socket.emit("room:answerCount", { count: room.answers.size });
   } else if (room.status === "summary") {
-    socket.emit("room:summary", summaryPayload(room));
-    const gained = room.lastGained.get(userId) ?? 0;
     const summary = summaryPayload(room);
+    socket.emit("room:summary", summary);
+    const gained = room.lastGained.get(userId) ?? 0;
     socket.emit("room:myResult", { correct: gained > 0, gained, correctOptionId: summary.correctOptionId });
   } else if (room.status === "ranking") {
     socket.emit("room:ranking", { ranking: buildRanking(room) });
@@ -158,6 +160,22 @@ function maybeAutoReveal(io: Server<ClientToServerEvents, ServerToClientEvents>,
   }
 }
 
+function returnToLobby(io: Server<ClientToServerEvents, ServerToClientEvents>, room: RoomState) {
+  if (room.timer) clearTimeout(room.timer);
+  room.status = "lobby";
+  room.triviaTitle = "";
+  room.questions = [];
+  room.currentIndex = 0;
+  room.questionStartedAt = null;
+  room.answers = new Map();
+  room.lastGained = new Map();
+  room.timer = null;
+  for (const player of room.players.values()) player.score = 0;
+
+  io.to(room.code).emit("room:returnedToLobby");
+  emitPlayersUpdate(io, room);
+}
+
 export function createTriviaServer() {
   const httpServer = createServer();
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -182,26 +200,14 @@ export function createTriviaServer() {
     const userId = socket.data.userId as string;
     const name = socket.data.name as string;
 
-    socket.on("room:create", async ({ triviaId }, ack) => {
-      const trivia = await db.trivia.findUnique({
-        where: { id: triviaId },
-        include: { questions: { orderBy: { order: "asc" }, include: { options: { orderBy: { order: "asc" } } } } },
-      });
-      if (!trivia || trivia.questions.length === 0) {
-        return ack({ error: "La trivia no existe o no tiene preguntas." });
-      }
-
+    socket.on("room:create", (ack) => {
       const code = generateRoomCode();
       const room: RoomState = {
         code,
         hostUserId: userId,
         hostSocketId: socket.id,
-        triviaTitle: trivia.title,
-        questions: trivia.questions.map((q) => ({
-          id: q.id,
-          text: q.text,
-          options: q.options.map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
-        })),
+        triviaTitle: "",
+        questions: [],
         status: "lobby",
         currentIndex: 0,
         questionStartedAt: null,
@@ -233,6 +239,29 @@ export function createTriviaServer() {
       emitPlayersUpdate(io, room);
     });
 
+    socket.on("room:selectTrivia", async ({ code, triviaId }) => {
+      const room = rooms.get(code);
+      if (!room || room.hostUserId !== userId || room.status !== "lobby") return;
+
+      const trivia = await db.trivia.findUnique({
+        where: { id: triviaId },
+        include: { questions: { orderBy: { order: "asc" }, include: { options: { orderBy: { order: "asc" } } } } },
+      });
+      if (!trivia || trivia.questions.length === 0) {
+        io.to(socket.id).emit("room:error", { message: "Esa trivia no existe o no tiene preguntas." });
+        return;
+      }
+
+      room.triviaTitle = trivia.title;
+      room.questions = trivia.questions.map((q) => ({
+        id: q.id,
+        text: q.text,
+        options: q.options.map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
+      }));
+      room.currentIndex = 0;
+      emitPlayersUpdate(io, room);
+    });
+
     socket.on("room:sync", ({ code }) => {
       const room = rooms.get(code);
       if (!room) return;
@@ -243,6 +272,10 @@ export function createTriviaServer() {
     socket.on("room:start", ({ code }) => {
       const room = rooms.get(code);
       if (!room || room.hostUserId !== userId || room.status !== "lobby") return;
+      if (room.questions.length === 0) {
+        io.to(socket.id).emit("room:error", { message: "Selecciona una trivia antes de iniciar." });
+        return;
+      }
       sendQuestion(io, room);
     });
 
@@ -273,6 +306,12 @@ export function createTriviaServer() {
       }
       room.currentIndex += 1;
       sendQuestion(io, room);
+    });
+
+    socket.on("room:returnToLobby", ({ code }) => {
+      const room = rooms.get(code);
+      if (!room || room.hostUserId !== userId || room.status !== "finished") return;
+      returnToLobby(io, room);
     });
 
     socket.on("room:leave", ({ code }) => {

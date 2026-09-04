@@ -10,6 +10,7 @@ import { AnswerSummaryView } from "@/components/trivias/answer-summary-view";
 import { RankingView } from "@/components/trivias/ranking-view";
 import { FinalPodium } from "@/components/trivias/final-podium";
 import { Button } from "@/components/ui/button";
+import type { AvailableTrivia } from "@/components/trivias/trivia-picker";
 import type {
   MyResultPayload,
   PlayerSummary,
@@ -20,7 +21,15 @@ import type {
 
 type Phase = "connecting" | "lobby" | "question" | "summary" | "ranking" | "finished" | "lost";
 
-export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) {
+export function TriviaRoom({
+  code,
+  isHost,
+  availableTrivias,
+}: {
+  code: string;
+  isHost: boolean;
+  availableTrivias: AvailableTrivia[];
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(() => (getConnectedTriviaSocket() ? "connecting" : "lost"));
   const [players, setPlayers] = useState<PlayerSummary[]>([]);
@@ -67,6 +76,16 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
       setFinalRanking(payload.ranking);
       setPhase("finished");
     };
+    const onReturnedToLobby = () => {
+      setQuestion(null);
+      setSelectedOptionId(null);
+      setAnsweredCount(0);
+      setSummary(null);
+      setMyResult(null);
+      setRanking(null);
+      setFinalRanking(null);
+      setPhase("lobby");
+    };
     const onError = (payload: { message: string }) => setErrorMsg(payload.message);
     const onClosed = () => setPhase("lost");
 
@@ -77,6 +96,7 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
     socket.on("room:myResult", onMyResult);
     socket.on("room:ranking", onRanking);
     socket.on("room:finished", onFinished);
+    socket.on("room:returnedToLobby", onReturnedToLobby);
     socket.on("room:error", onError);
     socket.on("room:closed", onClosed);
 
@@ -90,6 +110,7 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
       socket.off("room:myResult", onMyResult);
       socket.off("room:ranking", onRanking);
       socket.off("room:finished", onFinished);
+      socket.off("room:returnedToLobby", onReturnedToLobby);
       socket.off("room:error", onError);
       socket.off("room:closed", onClosed);
     };
@@ -105,6 +126,10 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
     const interval = setInterval(tick, 100);
     return () => clearInterval(interval);
   }, [phase, question]);
+
+  function handleSelectTrivia(triviaId: string) {
+    getConnectedTriviaSocket()?.emit("room:selectTrivia", { code, triviaId });
+  }
 
   function handleAnswer(optionId: string) {
     const socket = getConnectedTriviaSocket();
@@ -123,6 +148,10 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
 
   function handleNext() {
     getConnectedTriviaSocket()?.emit("room:next", { code });
+  }
+
+  function handleReturnToLobby() {
+    getConnectedTriviaSocket()?.emit("room:returnToLobby", { code });
   }
 
   function handleLeave() {
@@ -160,6 +189,8 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
           triviaTitle={triviaTitle}
           players={players}
           isHost={isHost}
+          availableTrivias={availableTrivias}
+          onSelectTrivia={handleSelectTrivia}
           onStart={handleStart}
           onLeave={handleLeave}
         />
@@ -195,7 +226,14 @@ export function TriviaRoom({ code, isHost }: { code: string; isHost: boolean }) 
         />
       )}
 
-      {phase === "finished" && finalRanking && <FinalPodium ranking={finalRanking} />}
+      {phase === "finished" && finalRanking && (
+        <FinalPodium
+          ranking={finalRanking}
+          isHost={isHost}
+          onReturnToLobby={handleReturnToLobby}
+          onLeave={handleLeave}
+        />
+      )}
     </div>
   );
 }

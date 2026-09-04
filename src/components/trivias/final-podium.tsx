@@ -1,13 +1,22 @@
 "use client";
 
 import { useEffect } from "react";
-import Link from "next/link";
 import confetti from "canvas-confetti";
-import { Trophy } from "lucide-react";
+import { RotateCcw, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { RankingEntry } from "@/lib/trivia-events";
 
-export function FinalPodium({ ranking }: { ranking: RankingEntry[] }) {
+export function FinalPodium({
+  ranking,
+  isHost,
+  onReturnToLobby,
+  onLeave,
+}: {
+  ranking: RankingEntry[];
+  isHost: boolean;
+  onReturnToLobby: () => void;
+  onLeave: () => void;
+}) {
   useEffect(() => {
     if (ranking.length === 0) return;
     const duration = 2000;
@@ -47,14 +56,18 @@ export function FinalPodium({ ranking }: { ranking: RankingEntry[] }) {
         </div>
       )}
 
-      <Button
-        render={<Link href="/didacticas/trivias" />}
-        nativeButton={false}
-        size="lg"
-        className="bg-white text-violet-700 hover:bg-white/90"
-      >
-        Volver a Trivias
-      </Button>
+      <div className="flex flex-col items-center gap-3">
+        {isHost ? (
+          <Button size="lg" onClick={onReturnToLobby} className="gap-2 bg-white text-violet-700 hover:bg-white/90">
+            <RotateCcw className="size-5" /> Jugar otra trivia
+          </Button>
+        ) : (
+          <p className="text-white/80">Esperando a que el anfitrión elija la siguiente trivia...</p>
+        )}
+        <Button size="sm" variant="ghost" onClick={onLeave} className="text-white/70 hover:text-white">
+          Salir de la sala
+        </Button>
+      </div>
     </div>
   );
 }

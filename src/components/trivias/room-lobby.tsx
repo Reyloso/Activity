@@ -1,5 +1,6 @@
 import { Crown, LogOut, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { TriviaPicker, type AvailableTrivia } from "@/components/trivias/trivia-picker";
 import type { PlayerSummary } from "@/lib/trivia-events";
 
 function initials(name: string) {
@@ -16,6 +17,8 @@ export function RoomLobby({
   triviaTitle,
   players,
   isHost,
+  availableTrivias,
+  onSelectTrivia,
   onStart,
   onLeave,
 }: {
@@ -23,6 +26,8 @@ export function RoomLobby({
   triviaTitle: string;
   players: PlayerSummary[];
   isHost: boolean;
+  availableTrivias: AvailableTrivia[];
+  onSelectTrivia: (triviaId: string) => void;
   onStart: () => void;
   onLeave: () => void;
 }) {
@@ -32,7 +37,8 @@ export function RoomLobby({
         <p className="text-sm font-medium uppercase tracking-widest text-white/70">Código de sala</p>
         <p className="text-6xl font-black tracking-[0.2em] drop-shadow-lg">{code}</p>
       </div>
-      <p className="text-xl font-semibold">{triviaTitle}</p>
+
+      {triviaTitle && <p className="text-xl font-semibold">{triviaTitle}</p>}
 
       <div className="flex flex-wrap items-center justify-center gap-3">
         {players.length === 0 && (
@@ -57,16 +63,23 @@ export function RoomLobby({
       <p className="text-sm text-white/70">{players.length} / 15 jugadores conectados</p>
 
       {isHost ? (
-        <Button
-          size="lg"
-          disabled={players.length === 0}
-          onClick={onStart}
-          className="gap-2 bg-white text-violet-700 hover:bg-white/90"
-        >
-          <Crown className="size-5" /> Iniciar juego
-        </Button>
+        <>
+          <TriviaPicker trivias={availableTrivias} selectedTriviaTitle={triviaTitle} onSelect={onSelectTrivia} />
+          <Button
+            size="lg"
+            disabled={!triviaTitle}
+            onClick={onStart}
+            className="gap-2 bg-white text-violet-700 hover:bg-white/90"
+          >
+            <Crown className="size-5" /> Iniciar juego
+          </Button>
+        </>
       ) : (
-        <p className="text-white/80">Esperando a que el anfitrión inicie la partida...</p>
+        <p className="text-white/80">
+          {triviaTitle
+            ? "Esperando a que el anfitrión inicie la partida..."
+            : "Esperando a que el anfitrión elija una trivia..."}
+        </p>
       )}
 
       <Button size="sm" variant="ghost" onClick={onLeave} className="gap-1.5 text-white/70 hover:text-white">

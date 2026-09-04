@@ -38,24 +38,32 @@ export type RoomStatus = "lobby" | "question" | "summary" | "ranking" | "finishe
 export type RoomErrorPayload = { message: string };
 
 export type ClientToServerEvents = {
-  "room:create": (payload: { triviaId: string }, ack: (res: { code: string } | { error: string }) => void) => void;
+  "room:create": (ack: (res: { code: string } | { error: string }) => void) => void;
   "room:join": (payload: { code: string }, ack: (res: { ok: true } | { error: string }) => void) => void;
+  "room:selectTrivia": (payload: { code: string; triviaId: string }) => void;
   "room:start": (payload: { code: string }) => void;
   "room:answer": (payload: { code: string; optionId: string }) => void;
   "room:showRanking": (payload: { code: string }) => void;
   "room:next": (payload: { code: string }) => void;
+  "room:returnToLobby": (payload: { code: string }) => void;
   "room:leave": (payload: { code: string }) => void;
   "room:sync": (payload: { code: string }) => void;
 };
 
 export type ServerToClientEvents = {
-  "room:playersUpdate": (payload: { players: PlayerSummary[]; hostName: string; triviaTitle: string }) => void;
+  "room:playersUpdate": (payload: {
+    players: PlayerSummary[];
+    hostName: string;
+    triviaTitle: string;
+    questionCount: number;
+  }) => void;
   "room:question": (payload: PublicQuestion) => void;
   "room:answerCount": (payload: { count: number }) => void;
   "room:summary": (payload: SummaryPayload) => void;
   "room:myResult": (payload: MyResultPayload) => void;
   "room:ranking": (payload: { ranking: RankingEntry[] }) => void;
   "room:finished": (payload: { ranking: RankingEntry[] }) => void;
+  "room:returnedToLobby": () => void;
   "room:error": (payload: RoomErrorPayload) => void;
   "room:closed": () => void;
 };
