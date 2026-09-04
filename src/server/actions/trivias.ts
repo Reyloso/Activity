@@ -8,7 +8,7 @@ import { signTriviaSocketToken } from "@/lib/trivia-auth";
 
 export type CreateTriviaState = { error: string | null };
 
-type QuestionInput = { text: string; options: { text: string; isCorrect: boolean }[] };
+type QuestionInput = { text: string; options: { text: string; isCorrect: boolean; points: number }[] };
 
 export async function createTrivia(_prev: CreateTriviaState, formData: FormData): Promise<CreateTriviaState> {
   const session = await auth();
@@ -17,6 +17,7 @@ export async function createTrivia(_prev: CreateTriviaState, formData: FormData)
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const questionsRaw = String(formData.get("questions") ?? "[]");
+  const shuffleQuestions = formData.get("shuffleQuestions") === "1";
 
   if (!title) return { error: "El título es obligatorio." };
 
@@ -34,8 +35,11 @@ export async function createTrivia(_prev: CreateTriviaState, formData: FormData)
     if (q.options.length !== 4 || q.options.some((o) => !o.text.trim())) {
       return { error: "Cada pregunta necesita exactamente 4 opciones con texto." };
     }
-    if (q.options.filter((o) => o.isCorrect).length !== 1) {
-      return { error: "Cada pregunta necesita exactamente una opción marcada como correcta." };
+    if (q.options.some((o) => !Number.isFinite(o.points) || o.points < 0)) {
+      return { error: "El puntaje de cada opción debe ser un número válido." };
+    }
+    if (q.options.filter((o) => o.isCorrect).length === 0) {
+      return { error: "Cada pregunta necesita al menos una opción marcada como correcta." };
     }
   }
 
@@ -43,13 +47,19 @@ export async function createTrivia(_prev: CreateTriviaState, formData: FormData)
     data: {
       title,
       description: description || null,
+      shuffleQuestions,
       createdById: session.user.id,
       questions: {
         create: questions.map((q, qIndex) => ({
           text: q.text,
           order: qIndex,
           options: {
-            create: q.options.map((o, oIndex) => ({ text: o.text, isCorrect: o.isCorrect, order: oIndex })),
+            create: q.options.map((o, oIndex) => ({
+              text: o.text,
+              isCorrect: o.isCorrect,
+              points: Math.round(o.points),
+              order: oIndex,
+            })),
           },
         })),
       },

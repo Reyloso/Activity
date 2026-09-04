@@ -5,8 +5,7 @@ import { db } from "@/lib/db";
 import { verifyTriviaSocketToken } from "@/lib/trivia-auth";
 import {
   MAX_PLAYERS_PER_ROOM,
-  MAX_POINTS,
-  MIN_POINTS,
+  MIN_SCORE_RATIO,
   OPTION_COLORS,
   QUESTION_DURATION_MS,
   type ClientToServerEvents,
@@ -14,7 +13,7 @@ import {
   type ServerToClientEvents,
 } from "@/lib/trivia-events";
 
-type FullOption = { id: string; text: string; isCorrect: boolean };
+type FullOption = { id: string; text: string; isCorrect: boolean; points: number };
 type FullQuestion = { id: string; text: string; options: FullOption[] };
 
 type Player = { userId: string; name: string; socketId: string; score: number };
@@ -45,9 +44,19 @@ function generateRoomCode(): string {
   return code;
 }
 
-function scoreFor(elapsedMs: number): number {
+function scoreFor(basePoints: number, elapsedMs: number): number {
   const clamped = Math.min(Math.max(elapsedMs, 0), QUESTION_DURATION_MS);
-  return Math.round(MIN_POINTS + (MAX_POINTS - MIN_POINTS) * (1 - clamped / QUESTION_DURATION_MS));
+  const minPoints = basePoints * MIN_SCORE_RATIO;
+  return Math.round(minPoints + (basePoints - minPoints) * (1 - clamped / QUESTION_DURATION_MS));
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
 }
 
 function buildRanking(room: RoomState): RankingEntry[] {
@@ -74,13 +83,13 @@ function publicQuestionPayload(room: RoomState) {
 
 function summaryPayload(room: RoomState) {
   const question = room.questions[room.currentIndex];
-  const correctOption = question.options.find((o) => o.isCorrect)!;
+  const correctOptionIds = question.options.filter((o) => o.isCorrect).map((o) => o.id);
   const optionCounts: Record<string, number> = {};
   for (const option of question.options) optionCounts[option.id] = 0;
   for (const answer of room.answers.values()) {
     optionCounts[answer.optionId] = (optionCounts[answer.optionId] ?? 0) + 1;
   }
-  return { correctOptionId: correctOption.id, optionCounts };
+  return { correctOptionIds, optionCounts };
 }
 
 function emitPlayersUpdate(io: Server<ClientToServerEvents, ServerToClientEvents>, room: RoomState) {
@@ -107,7 +116,7 @@ function sendStateTo(socket: Socket<ClientToServerEvents, ServerToClientEvents>,
     const summary = summaryPayload(room);
     socket.emit("room:summary", summary);
     const gained = room.lastGained.get(userId) ?? 0;
-    socket.emit("room:myResult", { correct: gained > 0, gained, correctOptionId: summary.correctOptionId });
+    socket.emit("room:myResult", { correct: gained > 0, gained });
   } else if (room.status === "ranking") {
     socket.emit("room:ranking", { ranking: buildRanking(room) });
   } else if (room.status === "finished") {
@@ -133,13 +142,15 @@ function showSummary(io: Server<ClientToServerEvents, ServerToClientEvents>, roo
   room.status = "summary";
 
   const question = room.questions[room.currentIndex];
-  const correctOption = question.options.find((o) => o.isCorrect)!;
 
   for (const [userId, answer] of room.answers) {
     const player = room.players.get(userId);
     if (!player) continue;
-    const isCorrect = answer.optionId === correctOption.id;
-    const gained = isCorrect ? scoreFor(answer.answeredAt - (room.questionStartedAt ?? answer.answeredAt)) : 0;
+    const chosenOption = question.options.find((o) => o.id === answer.optionId);
+    const gained =
+      chosenOption?.isCorrect
+        ? scoreFor(chosenOption.points, answer.answeredAt - (room.questionStartedAt ?? answer.answeredAt))
+        : 0;
     player.score += gained;
     room.lastGained.set(userId, gained);
   }
@@ -149,7 +160,7 @@ function showSummary(io: Server<ClientToServerEvents, ServerToClientEvents>, roo
 
   for (const player of room.players.values()) {
     const gained = room.lastGained.get(player.userId) ?? 0;
-    io.to(player.socketId).emit("room:myResult", { correct: gained > 0, gained, correctOptionId: summary.correctOptionId });
+    io.to(player.socketId).emit("room:myResult", { correct: gained > 0, gained });
   }
 }
 
@@ -253,11 +264,12 @@ export function createTriviaServer() {
       }
 
       room.triviaTitle = trivia.title;
-      room.questions = trivia.questions.map((q) => ({
+      const orderedQuestions = trivia.questions.map((q) => ({
         id: q.id,
         text: q.text,
-        options: q.options.map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
+        options: q.options.map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect, points: o.points })),
       }));
+      room.questions = trivia.shuffleQuestions ? shuffle(orderedQuestions) : orderedQuestions;
       room.currentIndex = 0;
       emitPlayersUpdate(io, room);
     });

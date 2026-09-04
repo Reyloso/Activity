@@ -43,7 +43,7 @@ export function AnswerSummaryView({
         {question.options.map((option) => {
           const Icon = OPTION_ICONS[option.color];
           const count = summary.optionCounts[option.id] ?? 0;
-          const isCorrect = option.id === summary.correctOptionId;
+          const isCorrect = summary.correctOptionIds.includes(option.id);
           return (
             <div key={option.id} className="flex items-center gap-3">
               <div

@@ -6,10 +6,11 @@ import { createTrivia, type CreateTriviaState } from "@/server/actions/trivias";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type OptionDraft = { text: string; isCorrect: boolean };
+type OptionDraft = { text: string; isCorrect: boolean; points: number };
 type QuestionDraft = { text: string; options: OptionDraft[] };
 
 const optionStyles = [
@@ -23,10 +24,10 @@ function emptyQuestion(): QuestionDraft {
   return {
     text: "",
     options: [
-      { text: "", isCorrect: true },
-      { text: "", isCorrect: false },
-      { text: "", isCorrect: false },
-      { text: "", isCorrect: false },
+      { text: "", isCorrect: true, points: 1000 },
+      { text: "", isCorrect: false, points: 1000 },
+      { text: "", isCorrect: false, points: 1000 },
+      { text: "", isCorrect: false, points: 1000 },
     ],
   };
 }
@@ -35,6 +36,7 @@ const initialState: CreateTriviaState = { error: null };
 
 export function CreateTriviaForm() {
   const [questions, setQuestions] = useState<QuestionDraft[]>([emptyQuestion()]);
+  const [shuffleQuestions, setShuffleQuestions] = useState(false);
   const [state, formAction, pending] = useActionState(createTrivia, initialState);
 
   function updateQuestionText(qIndex: number, text: string) {
@@ -49,10 +51,20 @@ export function CreateTriviaForm() {
     );
   }
 
-  function setCorrectOption(qIndex: number, oIndex: number) {
+  function toggleCorrect(qIndex: number, oIndex: number) {
     setQuestions((prev) =>
       prev.map((q, i) =>
-        i === qIndex ? { ...q, options: q.options.map((o, j) => ({ ...o, isCorrect: j === oIndex })) } : q,
+        i === qIndex
+          ? { ...q, options: q.options.map((o, j) => (j === oIndex ? { ...o, isCorrect: !o.isCorrect } : o)) }
+          : q,
+      ),
+    );
+  }
+
+  function updateOptionPoints(qIndex: number, oIndex: number, points: number) {
+    setQuestions((prev) =>
+      prev.map((q, i) =>
+        i === qIndex ? { ...q, options: q.options.map((o, j) => (j === oIndex ? { ...o, points } : o)) } : q,
       ),
     );
   }
@@ -80,6 +92,15 @@ export function CreateTriviaForm() {
             <Label htmlFor="description">Descripción (opcional)</Label>
             <Input id="description" name="description" maxLength={140} />
           </div>
+          <label className="flex items-center justify-between rounded-lg border p-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Orden aleatorio</span>
+              <span className="text-xs text-muted-foreground">
+                Las preguntas saldrán en un orden distinto cada vez que se juegue.
+              </span>
+            </div>
+            <Switch checked={shuffleQuestions} onCheckedChange={setShuffleQuestions} />
+          </label>
         </CardContent>
       </Card>
 
@@ -104,31 +125,44 @@ export function CreateTriviaForm() {
             />
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {question.options.map((option, oIndex) => (
-                <label
+                <div
                   key={oIndex}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg border p-2 focus-within:ring-2",
-                    optionStyles[oIndex],
-                  )}
+                  className={cn("flex flex-col gap-2 rounded-lg border p-2 focus-within:ring-2", optionStyles[oIndex])}
                 >
-                  <input
-                    type="radio"
-                    name={`correct-${qIndex}`}
-                    checked={option.isCorrect}
-                    onChange={() => setCorrectOption(qIndex, oIndex)}
-                    className="size-4 accent-emerald-600"
-                  />
-                  <Input
-                    value={option.text}
-                    onChange={(e) => updateOptionText(qIndex, oIndex, e.target.value)}
-                    placeholder={`Opción ${oIndex + 1}`}
-                    required
-                    className="border-none bg-transparent shadow-none focus-visible:ring-0"
-                  />
-                </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={option.isCorrect}
+                      onChange={() => toggleCorrect(qIndex, oIndex)}
+                      className="size-4 accent-emerald-600"
+                      title="Marcar como correcta"
+                    />
+                    <Input
+                      value={option.text}
+                      onChange={(e) => updateOptionText(qIndex, oIndex, e.target.value)}
+                      placeholder={`Opción ${oIndex + 1}`}
+                      required
+                      className="border-none bg-transparent shadow-none focus-visible:ring-0"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pl-6">
+                    <Label className="text-xs text-muted-foreground">Puntos si es correcta</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      step={50}
+                      value={option.points}
+                      onChange={(e) => updateOptionPoints(qIndex, oIndex, Number(e.target.value))}
+                      className="h-7 w-24 bg-white/70"
+                    />
+                  </div>
+                </div>
               ))}
             </div>
-            <p className="text-xs text-muted-foreground">Marca con el punto cuál opción es la correcta.</p>
+            <p className="text-xs text-muted-foreground">
+              Marca todas las opciones que consideres correctas. El puntaje se otorga según qué tan rápido responda
+              cada jugador.
+            </p>
           </CardContent>
         </Card>
       ))}
@@ -138,6 +172,7 @@ export function CreateTriviaForm() {
       </Button>
 
       <input type="hidden" name="questions" value={JSON.stringify(questions)} />
+      <input type="hidden" name="shuffleQuestions" value={shuffleQuestions ? "1" : "0"} />
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 

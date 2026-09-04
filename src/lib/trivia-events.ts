@@ -1,7 +1,7 @@
 export const QUESTION_DURATION_MS = 20_000;
 export const MAX_PLAYERS_PER_ROOM = 15;
-export const MIN_POINTS = 100;
-export const MAX_POINTS = 1000;
+export const MIN_SCORE_RATIO = 0.1;
+export const DEFAULT_OPTION_POINTS = 1000;
 
 export type OptionColor = "red" | "blue" | "yellow" | "green";
 
@@ -21,14 +21,13 @@ export type PublicQuestion = {
 export type RankingEntry = { userId: string; name: string; score: number };
 
 export type SummaryPayload = {
-  correctOptionId: string;
+  correctOptionIds: string[];
   optionCounts: Record<string, number>;
 };
 
 export type MyResultPayload = {
   correct: boolean;
   gained: number;
-  correctOptionId: string;
 };
 
 export type PlayerSummary = { userId: string; name: string };
