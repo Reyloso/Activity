@@ -34,7 +34,7 @@ export function AppSidebar({ isAdmin }: { isAdmin: boolean }) {
   const pathname = usePathname();
 
   return (
-    <Sidebar>
+    <Sidebar className="backdrop-blur-xl backdrop-saturate-150">
       <SidebarHeader>
         <div className="flex items-center gap-2 px-2 py-1.5">
           <GraduationCap className="size-5" />

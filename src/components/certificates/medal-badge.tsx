@@ -1,7 +1,7 @@
 import { Medal } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const medalPalettes = ["from-[#241654] to-[#9d174d]", "from-[#1E2761] to-[#6d28d9]", "from-[#7c2d12] to-[#b45309]"];
+const medalPalettes = ["from-[#14214f] to-[#3d55b0]", "from-[#14214f] to-[#5b7cf0]", "from-[#1c2c66] to-[#8fa4f5]"];
 
 export function MedalBadge({ title, date, index = 0 }: { title: string; date: string; index?: number }) {
   const palette = medalPalettes[index % medalPalettes.length];

@@ -26,7 +26,7 @@ export async function Navbar() {
   const user = session?.user;
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-4">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-black/5 bg-white/50 px-4 backdrop-blur-xl backdrop-saturate-150">
       <SidebarTrigger />
       {user && (
         <DropdownMenu>

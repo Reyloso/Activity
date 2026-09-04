@@ -15,9 +15,10 @@ import {
   renderToBuffer,
 } from "@react-pdf/renderer";
 
-const NAVY = "#1E2761";
-const GRADIENT_FROM = "#241654";
-const GRADIENT_TO = "#9d174d";
+const NAVY = "#14214f";
+const BRAND_LIGHT_1 = "#e1e8ff";
+const BRAND_LIGHT_2 = "#f6f9ff";
+const BRAND_LIGHT_3 = "#f9fafb";
 
 const PAGE_WIDTH = 841.89;
 const PAGE_HEIGHT = 595.28;
@@ -103,7 +104,7 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     fontSize: 12,
-    color: "#E9D8FD",
+    color: BRAND_LIGHT_1,
     letterSpacing: 3,
     textTransform: "uppercase",
   },
@@ -121,14 +122,14 @@ const styles = StyleSheet.create({
   },
   dateLine: {
     fontSize: 10,
-    color: "#E9D8FD",
+    color: BRAND_LIGHT_1,
     letterSpacing: 2,
     textTransform: "uppercase",
     marginTop: 8,
   },
   footerText: {
     fontSize: 9,
-    color: "#D9CCED",
+    color: NAVY,
     lineHeight: 1.5,
   },
 });
@@ -159,16 +160,17 @@ function GradientBackground() {
       preserveAspectRatio="none"
     >
       <Defs>
-        <LinearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0" stopColor={GRADIENT_FROM} />
-          <Stop offset="1" stopColor={GRADIENT_TO} />
+        <LinearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+          <Stop offset="0" stopColor={NAVY} />
+          <Stop offset="0.72" stopColor={NAVY} />
+          <Stop offset="0.85" stopColor={BRAND_LIGHT_1} />
+          <Stop offset="0.93" stopColor={BRAND_LIGHT_2} />
+          <Stop offset="1" stopColor={BRAND_LIGHT_3} />
         </LinearGradient>
       </Defs>
       <Rect x={0} y={0} width={w} height={h} fill="url(#bg)" />
       <Polygon points={`0,0 ${w * 0.3},0 ${w * 0.1},${h * 0.33}`} fill="#FFFFFF" fillOpacity={0.04} />
       <Polygon points={`${w},0 ${w},${h * 0.43} ${w * 0.67},${h * 0.14}`} fill="#FFFFFF" fillOpacity={0.05} />
-      <Polygon points={`${w},${h} ${w},${h * 0.62} ${w * 0.71},${h}`} fill="#000000" fillOpacity={0.08} />
-      <Polygon points={`0,${h} 0,${h * 0.62} ${w * 0.26},${h}`} fill="#000000" fillOpacity={0.06} />
       <Polygon
         points={`${w * 0.39},0 ${w * 0.55},${h * 0.21} ${w * 0.32},${h * 0.29}`}
         fill="#FFFFFF"
