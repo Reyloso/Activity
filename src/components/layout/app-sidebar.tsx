@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { GraduationCap, Home, LayoutGrid, Gamepad2, ShieldCheck, Trophy, Users, UserCog } from "lucide-react";
+import { GraduationCap, Home, LayoutGrid, Gamepad2, ShieldCheck, Trophy, UserCog, UserRound, Users } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +20,7 @@ const mainLinks = [
   { href: "/activities", label: "Actividades", icon: LayoutGrid },
   { href: "/didacticas", label: "Didácticas", icon: Gamepad2 },
   { href: "/my-activities", label: "Mis actividades aprobadas", icon: Trophy },
+  { href: "/profile", label: "Mi perfil", icon: UserRound },
 ];
 
 const adminLinks = [

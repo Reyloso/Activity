@@ -1,16 +1,13 @@
-import { Download, Trophy } from "lucide-react";
+import { Download } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { getActivityConfig } from "@/activities/registry";
+import { getCompletedEnrollments } from "@/server/queries/enrollments";
+import { CertificatePreview } from "@/components/certificates/certificate-preview";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
 export default async function MyActivitiesPage() {
   const session = await auth();
-  const enrollments = await db.enrollment.findMany({
-    where: { userId: session!.user.id!, completedAt: { not: null } },
-    orderBy: { completedAt: "desc" },
-  });
+  const enrollments = await getCompletedEnrollments(session!.user.id!);
 
   return (
     <div className="flex flex-col gap-6">
@@ -19,27 +16,24 @@ export default async function MyActivitiesPage() {
       {enrollments.length === 0 ? (
         <p className="text-muted-foreground">Aún no has completado ninguna actividad.</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {enrollments.map((enrollment) => {
-            const config = getActivityConfig(enrollment.activitySlug);
-            if (!config) return null;
+            const date = enrollment.completedAt!.toLocaleDateString("es-CO", {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            });
             return (
               <Card key={enrollment.id}>
                 <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Trophy className="size-5 text-amber-500" />
-                    <CardTitle className="text-lg">{config.title}</CardTitle>
-                  </div>
+                  <CardTitle className="text-lg">{enrollment.activityTitle}</CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    Completada el{" "}
-                    {enrollment.completedAt!.toLocaleDateString("es-CO", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </p>
+                <CardContent className="flex flex-col gap-4">
+                  <CertificatePreview
+                    fullName={session!.user.name!}
+                    activityTitle={enrollment.activityTitle}
+                    date={date}
+                  />
                   <Button
                     render={<a href={`/api/certificates/${enrollment.activitySlug}`} />}
                     nativeButton={false}
