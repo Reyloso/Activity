@@ -4,6 +4,7 @@ import { Server, type Socket } from "socket.io";
 import { db } from "@/lib/db";
 import { verifyTriviaSocketToken } from "@/lib/trivia-auth";
 import {
+  DEFAULT_OPTION_POINTS,
   MAX_PLAYERS_PER_ROOM,
   MIN_SCORE_RATIO,
   OPTION_COLORS,
@@ -23,12 +24,14 @@ type RoomState = {
   hostUserId: string;
   hostSocketId: string;
   triviaTitle: string;
+  usePoints: boolean;
   questions: FullQuestion[];
   status: "lobby" | "question" | "summary" | "ranking" | "finished";
   currentIndex: number;
   questionStartedAt: number | null;
   answers: Map<string, { optionId: string; answeredAt: number }>;
   lastGained: Map<string, number>;
+  lastCorrect: Map<string, boolean>;
   players: Map<string, Player>;
   timer: NodeJS.Timeout | null;
 };
@@ -116,7 +119,8 @@ function sendStateTo(socket: Socket<ClientToServerEvents, ServerToClientEvents>,
     const summary = summaryPayload(room);
     socket.emit("room:summary", summary);
     const gained = room.lastGained.get(userId) ?? 0;
-    socket.emit("room:myResult", { correct: gained > 0, gained });
+    const correct = room.lastCorrect.get(userId) ?? false;
+    socket.emit("room:myResult", { correct, gained });
   } else if (room.status === "ranking") {
     socket.emit("room:ranking", { ranking: buildRanking(room) });
   } else if (room.status === "finished") {
@@ -127,6 +131,7 @@ function sendStateTo(socket: Socket<ClientToServerEvents, ServerToClientEvents>,
 function sendQuestion(io: Server<ClientToServerEvents, ServerToClientEvents>, room: RoomState) {
   room.answers = new Map();
   room.lastGained = new Map();
+  room.lastCorrect = new Map();
   room.questionStartedAt = Date.now();
   room.status = "question";
 
@@ -147,12 +152,14 @@ function showSummary(io: Server<ClientToServerEvents, ServerToClientEvents>, roo
     const player = room.players.get(userId);
     if (!player) continue;
     const chosenOption = question.options.find((o) => o.id === answer.optionId);
-    const gained =
-      chosenOption?.isCorrect
-        ? scoreFor(chosenOption.points, answer.answeredAt - (room.questionStartedAt ?? answer.answeredAt))
-        : 0;
+    const isCorrect = !!chosenOption?.isCorrect;
+    const basePoints = room.usePoints ? (chosenOption?.points ?? DEFAULT_OPTION_POINTS) : DEFAULT_OPTION_POINTS;
+    const gained = isCorrect
+      ? scoreFor(basePoints, answer.answeredAt - (room.questionStartedAt ?? answer.answeredAt))
+      : 0;
     player.score += gained;
     room.lastGained.set(userId, gained);
+    room.lastCorrect.set(userId, isCorrect);
   }
 
   const summary = summaryPayload(room);
@@ -160,7 +167,8 @@ function showSummary(io: Server<ClientToServerEvents, ServerToClientEvents>, roo
 
   for (const player of room.players.values()) {
     const gained = room.lastGained.get(player.userId) ?? 0;
-    io.to(player.socketId).emit("room:myResult", { correct: gained > 0, gained });
+    const correct = room.lastCorrect.get(player.userId) ?? false;
+    io.to(player.socketId).emit("room:myResult", { correct, gained });
   }
 }
 
@@ -180,6 +188,7 @@ function returnToLobby(io: Server<ClientToServerEvents, ServerToClientEvents>, r
   room.questionStartedAt = null;
   room.answers = new Map();
   room.lastGained = new Map();
+  room.lastCorrect = new Map();
   room.timer = null;
   for (const player of room.players.values()) player.score = 0;
 
@@ -218,12 +227,14 @@ export function createTriviaServer() {
         hostUserId: userId,
         hostSocketId: socket.id,
         triviaTitle: "",
+        usePoints: true,
         questions: [],
         status: "lobby",
         currentIndex: 0,
         questionStartedAt: null,
         answers: new Map(),
         lastGained: new Map(),
+        lastCorrect: new Map(),
         players: new Map([[userId, { userId, name, socketId: socket.id, score: 0 }]]),
         timer: null,
       };
@@ -264,6 +275,7 @@ export function createTriviaServer() {
       }
 
       room.triviaTitle = trivia.title;
+      room.usePoints = trivia.usePoints;
       const orderedQuestions = trivia.questions.map((q) => ({
         id: q.id,
         text: q.text,

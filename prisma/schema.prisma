@@ -95,6 +95,7 @@ model Trivia {
   title            String
   description      String?
   shuffleQuestions Boolean  @default(false)
+  usePoints        Boolean  @default(true)
   createdById      String
   createdBy        User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
   createdAt        DateTime @default(now())

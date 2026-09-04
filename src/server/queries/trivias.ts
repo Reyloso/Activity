@@ -9,3 +9,15 @@ export async function getPublicTrivias() {
     },
   });
 }
+
+export async function getTriviaForEdit(triviaId: string) {
+  return db.trivia.findUnique({
+    where: { id: triviaId },
+    include: {
+      questions: {
+        orderBy: { order: "asc" },
+        include: { options: { orderBy: { order: "asc" } } },
+      },
+    },
+  });
+}

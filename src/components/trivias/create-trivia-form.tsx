@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { createTrivia, type CreateTriviaState } from "@/server/actions/trivias";
+import { createTrivia, updateTrivia, type CreateTriviaState } from "@/server/actions/trivias";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,10 +34,27 @@ function emptyQuestion(): QuestionDraft {
 
 const initialState: CreateTriviaState = { error: null };
 
-export function CreateTriviaForm() {
-  const [questions, setQuestions] = useState<QuestionDraft[]>([emptyQuestion()]);
-  const [shuffleQuestions, setShuffleQuestions] = useState(false);
-  const [state, formAction, pending] = useActionState(createTrivia, initialState);
+export function CreateTriviaForm({
+  triviaId,
+  initialTitle = "",
+  initialDescription = "",
+  initialShuffleQuestions = false,
+  initialUsePoints = true,
+  initialQuestions,
+}: {
+  triviaId?: string;
+  initialTitle?: string;
+  initialDescription?: string;
+  initialShuffleQuestions?: boolean;
+  initialUsePoints?: boolean;
+  initialQuestions?: QuestionDraft[];
+}) {
+  const isEdit = !!triviaId;
+  const [questions, setQuestions] = useState<QuestionDraft[]>(initialQuestions ?? [emptyQuestion()]);
+  const [shuffleQuestions, setShuffleQuestions] = useState(initialShuffleQuestions);
+  const [usePoints, setUsePoints] = useState(initialUsePoints);
+  const action = isEdit ? updateTrivia.bind(null, triviaId) : createTrivia;
+  const [state, formAction, pending] = useActionState(action, initialState);
 
   function updateQuestionText(qIndex: number, text: string) {
     setQuestions((prev) => prev.map((q, i) => (i === qIndex ? { ...q, text } : q)));
@@ -86,11 +103,11 @@ export function CreateTriviaForm() {
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="title">Título</Label>
-            <Input id="title" name="title" required maxLength={80} />
+            <Input id="title" name="title" required maxLength={80} defaultValue={initialTitle} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="description">Descripción (opcional)</Label>
-            <Input id="description" name="description" maxLength={140} />
+            <Input id="description" name="description" maxLength={140} defaultValue={initialDescription} />
           </div>
           <label className="flex items-center justify-between rounded-lg border p-3">
             <div className="flex flex-col">
@@ -100,6 +117,17 @@ export function CreateTriviaForm() {
               </span>
             </div>
             <Switch checked={shuffleQuestions} onCheckedChange={setShuffleQuestions} />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border p-3">
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Usar puntaje</span>
+              <span className="text-xs text-muted-foreground">
+                {usePoints
+                  ? "Se otorgan puntos según la respuesta y qué tan rápido se conteste."
+                  : "Se usa el puntaje estándar (100 a 1000 según velocidad), sin valores personalizados por opción."}
+              </span>
+            </div>
+            <Switch checked={usePoints} onCheckedChange={setUsePoints} />
           </label>
         </CardContent>
       </Card>
@@ -145,23 +173,25 @@ export function CreateTriviaForm() {
                       className="border-none bg-transparent shadow-none focus-visible:ring-0"
                     />
                   </div>
-                  <div className="flex items-center gap-2 pl-6">
-                    <Label className="text-xs text-muted-foreground">Puntos si es correcta</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={50}
-                      value={option.points}
-                      onChange={(e) => updateOptionPoints(qIndex, oIndex, Number(e.target.value))}
-                      className="h-7 w-24 bg-white/70"
-                    />
-                  </div>
+                  {usePoints && (
+                    <div className="flex items-center gap-2 pl-6">
+                      <Label className="text-xs text-muted-foreground">Puntos si es correcta</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step={50}
+                        value={option.points}
+                        onChange={(e) => updateOptionPoints(qIndex, oIndex, Number(e.target.value))}
+                        className="h-7 w-24 bg-white/70"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
             <p className="text-xs text-muted-foreground">
-              Marca todas las opciones que consideres correctas. El puntaje se otorga según qué tan rápido responda
-              cada jugador.
+              Marca todas las opciones que consideres correctas.
+              {usePoints && " El puntaje se otorga según qué tan rápido responda cada jugador."}
             </p>
           </CardContent>
         </Card>
@@ -173,11 +203,12 @@ export function CreateTriviaForm() {
 
       <input type="hidden" name="questions" value={JSON.stringify(questions)} />
       <input type="hidden" name="shuffleQuestions" value={shuffleQuestions ? "1" : "0"} />
+      <input type="hidden" name="usePoints" value={usePoints ? "1" : "0"} />
 
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
       <Button type="submit" disabled={pending} className="w-fit">
-        {pending ? "Guardando..." : "Guardar trivia"}
+        {pending ? "Guardando..." : isEdit ? "Guardar cambios" : "Guardar trivia"}
       </Button>
     </form>
   );

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { HelpCircle, Plus } from "lucide-react";
+import { HelpCircle, Pencil, Plus } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getPublicTrivias } from "@/server/queries/trivias";
 import { CreateRoomButton } from "@/components/trivias/create-room-button";
@@ -47,7 +47,7 @@ export default async function TriviasPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {trivias.map((trivia) => {
-              const isOwner = trivia.createdById === session!.user.id;
+              const canManage = trivia.createdById === session!.user.id || session!.user.role === "ADMIN";
               return (
                 <Card key={trivia.id}>
                   <CardHeader>
@@ -56,7 +56,20 @@ export default async function TriviasPage() {
                         <HelpCircle className="size-5 text-violet-600" />
                         <CardTitle className="text-lg">{trivia.title}</CardTitle>
                       </div>
-                      {isOwner && <DeleteTriviaButton triviaId={trivia.id} triviaTitle={trivia.title} />}
+                      {canManage && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            render={<Link href={`/didacticas/trivias/${trivia.id}/editar`} />}
+                            nativeButton={false}
+                            size="icon"
+                            variant="ghost"
+                            className="size-8"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                          <DeleteTriviaButton triviaId={trivia.id} triviaTitle={trivia.title} />
+                        </div>
+                      )}
                     </div>
                     {trivia.description && <CardDescription>{trivia.description}</CardDescription>}
                   </CardHeader>

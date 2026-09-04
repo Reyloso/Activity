@@ -9,15 +9,20 @@ import { signTriviaSocketToken } from "@/lib/trivia-auth";
 export type CreateTriviaState = { error: string | null };
 
 type QuestionInput = { text: string; options: { text: string; isCorrect: boolean; points: number }[] };
+type ParsedTrivia = {
+  title: string;
+  description: string | null;
+  shuffleQuestions: boolean;
+  usePoints: boolean;
+  questions: QuestionInput[];
+};
 
-export async function createTrivia(_prev: CreateTriviaState, formData: FormData): Promise<CreateTriviaState> {
-  const session = await auth();
-  if (!session?.user.id) throw new Error("No autenticado");
-
+function parseTriviaFormData(formData: FormData): { error: string } | ParsedTrivia {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const questionsRaw = String(formData.get("questions") ?? "[]");
   const shuffleQuestions = formData.get("shuffleQuestions") === "1";
+  const usePoints = formData.get("usePoints") === "1";
 
   if (!title) return { error: "El título es obligatorio." };
 
@@ -43,14 +48,25 @@ export async function createTrivia(_prev: CreateTriviaState, formData: FormData)
     }
   }
 
+  return { title, description: description || null, shuffleQuestions, usePoints, questions };
+}
+
+export async function createTrivia(_prev: CreateTriviaState, formData: FormData): Promise<CreateTriviaState> {
+  const session = await auth();
+  if (!session?.user.id) throw new Error("No autenticado");
+
+  const parsed = parseTriviaFormData(formData);
+  if ("error" in parsed) return parsed;
+
   const trivia = await db.trivia.create({
     data: {
-      title,
-      description: description || null,
-      shuffleQuestions,
+      title: parsed.title,
+      description: parsed.description,
+      shuffleQuestions: parsed.shuffleQuestions,
+      usePoints: parsed.usePoints,
       createdById: session.user.id,
       questions: {
-        create: questions.map((q, qIndex) => ({
+        create: parsed.questions.map((q, qIndex) => ({
           text: q.text,
           order: qIndex,
           options: {
@@ -68,6 +84,54 @@ export async function createTrivia(_prev: CreateTriviaState, formData: FormData)
 
   revalidatePath("/didacticas/trivias");
   redirect(`/didacticas/trivias?created=${trivia.id}`);
+}
+
+export async function updateTrivia(
+  triviaId: string,
+  _prev: CreateTriviaState,
+  formData: FormData,
+): Promise<CreateTriviaState> {
+  const session = await auth();
+  if (!session?.user.id) throw new Error("No autenticado");
+
+  const trivia = await db.trivia.findUnique({ where: { id: triviaId } });
+  if (!trivia) return { error: "La trivia no existe." };
+  if (trivia.createdById !== session.user.id && session.user.role !== "ADMIN") {
+    return { error: "No puedes editar una trivia que no creaste." };
+  }
+
+  const parsed = parseTriviaFormData(formData);
+  if ("error" in parsed) return parsed;
+
+  await db.$transaction(async (tx) => {
+    await tx.triviaQuestion.deleteMany({ where: { triviaId } });
+    await tx.trivia.update({
+      where: { id: triviaId },
+      data: {
+        title: parsed.title,
+        description: parsed.description,
+        shuffleQuestions: parsed.shuffleQuestions,
+        usePoints: parsed.usePoints,
+        questions: {
+          create: parsed.questions.map((q, qIndex) => ({
+            text: q.text,
+            order: qIndex,
+            options: {
+              create: q.options.map((o, oIndex) => ({
+                text: o.text,
+                isCorrect: o.isCorrect,
+                points: Math.round(o.points),
+                order: oIndex,
+              })),
+            },
+          })),
+        },
+      },
+    });
+  });
+
+  revalidatePath("/didacticas/trivias");
+  redirect(`/didacticas/trivias?updated=${triviaId}`);
 }
 
 export async function deleteTrivia(triviaId: string) {
