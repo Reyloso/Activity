@@ -1,0 +1,144 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  lastName     String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(MEMBER)
+  isBlocked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  groups          GroupMember[]
+  moduleProgress  ModuleProgress[]
+  enrollments     Enrollment[]
+  trivias         Trivia[]
+}
+
+model Group {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+
+  members    GroupMember[]
+  activities ActivityGroup[]
+  games      GameGroup[]
+}
+
+model GroupMember {
+  groupId String
+  userId  String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, userId])
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  coverColor  String   @default("2F3C7E")
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  groups ActivityGroup[]
+}
+
+model ActivityGroup {
+  activityId String
+  groupId    String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, groupId])
+}
+
+model Game {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  description String
+  coverColor  String   @default("2F3C7E")
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  groups GameGroup[]
+}
+
+model GameGroup {
+  gameId  String
+  groupId String
+  game    Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  group   Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, groupId])
+}
+
+model Trivia {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  questions TriviaQuestion[]
+}
+
+model TriviaQuestion {
+  id       String @id @default(cuid())
+  triviaId String
+  trivia   Trivia @relation(fields: [triviaId], references: [id], onDelete: Cascade)
+  text     String
+  order    Int
+
+  options TriviaOption[]
+}
+
+model TriviaOption {
+  id         String         @id @default(cuid())
+  questionId String
+  question   TriviaQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean        @default(false)
+  order      Int
+}
+
+model ModuleProgress {
+  id           String    @id @default(cuid())
+  userId       String
+  activitySlug String
+  moduleId     String
+  completedAt  DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activitySlug, moduleId])
+}
+
+model Enrollment {
+  id                  String    @id @default(cuid())
+  userId              String
+  activitySlug        String
+  completedAt         DateTime?
+  certificateIssuedAt DateTime?
+  createdAt           DateTime  @default(now())
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, activitySlug])
+}
