@@ -77,7 +77,16 @@ export async function publishActivity(slug: string, config: { title: string; des
 
 export type CreateActivityState = { error: string | null };
 
-type ActivityModuleInput = { title: string; content: string };
+type OptionInput = { text: string; isCorrect: boolean };
+type QuestionInput = { text: string; points: number; options: OptionInput[] };
+type ActivityModuleInput = {
+  title: string;
+  content: string;
+  imageUrl: string;
+  videoUrl: string;
+  passingScore: number;
+  questions: QuestionInput[];
+};
 
 export async function createActivity(
   _prev: CreateActivityState,
@@ -103,7 +112,20 @@ export async function createActivity(
   if (modules.length === 0) return { error: "Agrega al menos un módulo." };
   for (const m of modules) {
     if (!m.title.trim()) return { error: "Cada módulo necesita un título." };
-    if (!m.content.trim()) return { error: "Cada módulo necesita contenido." };
+    const hasContent = m.content.trim() || m.imageUrl.trim() || m.videoUrl.trim() || m.questions.length > 0;
+    if (!hasContent) return { error: `El módulo "${m.title}" necesita contenido, imagen, video o preguntas.` };
+    for (const q of m.questions) {
+      if (!q.text.trim()) return { error: "Cada pregunta necesita un texto." };
+      if (q.options.length < 2 || q.options.some((o) => !o.text.trim())) {
+        return { error: "Cada pregunta necesita al menos 2 opciones con texto." };
+      }
+      if (q.options.filter((o) => o.isCorrect).length !== 1) {
+        return { error: "Cada pregunta necesita exactamente una opción correcta." };
+      }
+      if (!Number.isFinite(q.points) || q.points < 0) {
+        return { error: "El puntaje de cada pregunta debe ser un número válido." };
+      }
+    }
   }
 
   const slug = await uniqueActivitySlug(title);
@@ -118,8 +140,25 @@ export async function createActivity(
       modules: {
         create: modules.map((m, index) => ({
           title: m.title.trim(),
-          content: m.content.trim(),
+          content: m.content.trim() || null,
+          imageUrl: m.imageUrl.trim() || null,
+          videoUrl: m.videoUrl.trim() || null,
+          passingScore: m.questions.some((q) => q.points > 0) ? Math.round(m.passingScore) || 70 : null,
           order: index,
+          questions: {
+            create: m.questions.map((q, qIndex) => ({
+              text: q.text.trim(),
+              points: Math.round(q.points),
+              order: qIndex,
+              options: {
+                create: q.options.map((o, oIndex) => ({
+                  text: o.text.trim(),
+                  isCorrect: o.isCorrect,
+                  order: oIndex,
+                })),
+              },
+            })),
+          },
         })),
       },
     },

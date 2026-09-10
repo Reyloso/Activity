@@ -76,6 +76,10 @@ export function ModuleViewer({
             completed={completedIds.has(current.id)}
             onComplete={handleComplete}
             content={current.content}
+            imageUrl={current.imageUrl}
+            videoUrl={current.videoUrl}
+            questions={current.questions}
+            passingScore={current.passingScore}
           />
         )}
       </div>
