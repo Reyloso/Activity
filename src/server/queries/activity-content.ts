@@ -9,7 +9,17 @@ export async function getResolvedActivityConfig(slug: string): Promise<ActivityC
 
   const activity = await db.activity.findUnique({
     where: { slug },
-    include: { modules: { orderBy: { order: "asc" } } },
+    include: {
+      modules: {
+        orderBy: { order: "asc" },
+        include: {
+          questions: {
+            orderBy: { order: "asc" },
+            include: { options: { orderBy: { order: "asc" } } },
+          },
+        },
+      },
+    },
   });
   if (!activity || activity.modules.length === 0) return null;
 
@@ -23,7 +33,16 @@ export async function getResolvedActivityConfig(slug: string): Promise<ActivityC
       title: m.title,
       type: "content" as const,
       Component: TextModule,
-      content: m.content,
+      content: m.content ?? undefined,
+      imageUrl: m.imageUrl ?? undefined,
+      videoUrl: m.videoUrl ?? undefined,
+      passingScore: m.passingScore ?? undefined,
+      questions: m.questions.map((q) => ({
+        id: q.id,
+        text: q.text,
+        points: q.points,
+        options: q.options.map((o) => ({ id: o.id, text: o.text, isCorrect: o.isCorrect })),
+      })),
     })),
   };
 }

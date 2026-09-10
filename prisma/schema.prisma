@@ -62,11 +62,36 @@ model Activity {
 }
 
 model ActivityModule {
-  id         String   @id @default(cuid())
-  activityId String
-  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
-  title      String
-  content    String
+  id           String   @id @default(cuid())
+  activityId   String
+  activity     Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  title        String
+  content      String?
+  imageUrl     String?
+  videoUrl     String?
+  passingScore Int?
+  order        Int
+
+  questions ActivityModuleQuestion[]
+}
+
+model ActivityModuleQuestion {
+  id       String         @id @default(cuid())
+  moduleId String
+  module   ActivityModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  text     String
+  points   Int            @default(0)
+  order    Int
+
+  options ActivityModuleOption[]
+}
+
+model ActivityModuleOption {
+  id         String                 @id @default(cuid())
+  questionId String
+  question   ActivityModuleQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean                @default(false)
   order      Int
 }
 
