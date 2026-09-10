@@ -32,7 +32,7 @@ export function CertificatePreview({
       <div
         className="relative flex flex-1 flex-col justify-between overflow-hidden px-8 py-6"
         style={{
-          background: "linear-gradient(to bottom, #14214f 0%, #14214f 72%, #e1e8ff 85%, #f6f9ff 93%, #f9fafb 100%)",
+          background: "linear-gradient(to bottom, #14214f 0%, #14214f 50%, #e1e8ff 65%, #f6f9ff 80%, #f9fafb 100%)",
         }}
       >
         <div className="pointer-events-none absolute inset-0 opacity-10 [background:radial-gradient(circle_at_20%_20%,white,transparent_35%),radial-gradient(circle_at_85%_15%,white,transparent_30%)]" />
@@ -41,15 +41,18 @@ export function CertificatePreview({
             Activity Milio · Capacitación interna
           </p>
           <p className="mt-1 text-3xl font-bold tracking-tight">CERTIFICADO</p>
+          <p className="mt-3 text-[8px] uppercase tracking-[0.15em] text-[#e1e8ff]">Otorgado a</p>
+          <p className="mt-0.5 font-serif text-xl">{fullName}</p>
+          <p className="mt-1 text-[8px] uppercase tracking-[0.15em] text-[#e1e8ff]">El {date}</p>
         </div>
-        <div className="relative text-white">
-          <p className="font-serif text-xl">{fullName}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.15em] text-[#e1e8ff]">Otorgado el {date}</p>
+        <div className="relative">
+          <p className="text-[8px] uppercase tracking-wide text-[#14214f] opacity-70">Por completar la actividad</p>
+          <p className="mt-0.5 text-base font-bold text-[#14214f]">{activityTitle}</p>
+          <p className="mt-2 text-[9px] leading-relaxed text-[#14214f] opacity-75">
+            Se otorga el presente certificado de aprobación dentro del programa de capacitación interna de
+            Milio Pay.
+          </p>
         </div>
-        <p className="relative text-[9px] leading-relaxed text-[#14214f]">
-          Habiendo completado la actividad &quot;{activityTitle}&quot;, se otorga el presente certificado de
-          aprobación dentro del programa de capacitación interna de Milio Pay.
-        </p>
       </div>
     </div>
   );
