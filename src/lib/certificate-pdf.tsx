@@ -114,11 +114,18 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     marginTop: 6,
   },
+  grantedTo: {
+    fontSize: 10,
+    color: BRAND_LIGHT_1,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginTop: 22,
+  },
   name: {
     fontSize: 26,
     fontFamily: "Times-Roman",
     color: "#FFFFFF",
-    marginTop: 30,
+    marginTop: 6,
   },
   dateLine: {
     fontSize: 10,
@@ -127,10 +134,25 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     marginTop: 8,
   },
+  activityLabel: {
+    fontSize: 10,
+    color: NAVY,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+    opacity: 0.7,
+  },
+  activityTitle: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: NAVY,
+    marginTop: 4,
+  },
   footerText: {
     fontSize: 9,
     color: NAVY,
+    opacity: 0.75,
     lineHeight: 1.5,
+    marginTop: 12,
   },
 });
 
@@ -162,9 +184,9 @@ function GradientBackground() {
       <Defs>
         <LinearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
           <Stop offset="0" stopColor={NAVY} />
-          <Stop offset="0.72" stopColor={NAVY} />
-          <Stop offset="0.85" stopColor={BRAND_LIGHT_1} />
-          <Stop offset="0.93" stopColor={BRAND_LIGHT_2} />
+          <Stop offset="0.5" stopColor={NAVY} />
+          <Stop offset="0.65" stopColor={BRAND_LIGHT_1} />
+          <Stop offset="0.8" stopColor={BRAND_LIGHT_2} />
           <Stop offset="1" stopColor={BRAND_LIGHT_3} />
         </LinearGradient>
       </Defs>
@@ -216,15 +238,18 @@ function CertificateDocument({
           <View>
             <Text style={styles.eyebrow}>Activity Milio · Capacitación interna</Text>
             <Text style={styles.title}>CERTIFICADO</Text>
+            <Text style={styles.grantedTo}>Otorgado a</Text>
+            <Text style={styles.name}>{fullName}</Text>
+            <Text style={styles.dateLine}>El {date}</Text>
           </View>
           <View>
-            <Text style={styles.name}>{fullName}</Text>
-            <Text style={styles.dateLine}>Otorgado el {date}</Text>
+            <Text style={styles.activityLabel}>Por completar la actividad</Text>
+            <Text style={styles.activityTitle}>{activityTitle}</Text>
+            <Text style={styles.footerText}>
+              Se otorga el presente certificado de aprobación dentro del programa de capacitación
+              interna de Milio Pay.
+            </Text>
           </View>
-          <Text style={styles.footerText}>
-            Habiendo completado la actividad &quot;{activityTitle}&quot;, se otorga el presente
-            certificado de aprobación dentro del programa de capacitación interna de Milio Pay.
-          </Text>
         </View>
       </Page>
     </Document>

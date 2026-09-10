@@ -75,6 +75,7 @@ export function ModuleViewer({
             key={current.id}
             completed={completedIds.has(current.id)}
             onComplete={handleComplete}
+            content={current.content}
           />
         )}
       </div>

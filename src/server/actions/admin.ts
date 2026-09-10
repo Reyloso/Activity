@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
@@ -9,6 +10,27 @@ async function requireAdmin() {
   const session = await auth();
   if (session?.user.role !== "ADMIN") throw new Error("No autorizado");
   return session;
+}
+
+function slugify(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function uniqueActivitySlug(base: string) {
+  const slugBase = slugify(base) || "actividad";
+  let slug = slugBase;
+  let suffix = 2;
+  while (await db.activity.findUnique({ where: { slug } })) {
+    slug = `${slugBase}-${suffix}`;
+    suffix += 1;
+  }
+  return slug;
 }
 
 export async function createGroup(_prev: { error: string | null }, formData: FormData) {
@@ -50,6 +72,72 @@ export async function publishActivity(slug: string, config: { title: string; des
     update: { published: true },
     create: { slug, published: true, ...config },
   });
+  revalidatePath("/admin/activities");
+}
+
+export type CreateActivityState = { error: string | null };
+
+type ActivityModuleInput = { title: string; content: string };
+
+export async function createActivity(
+  _prev: CreateActivityState,
+  formData: FormData,
+): Promise<CreateActivityState> {
+  await requireAdmin();
+
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const coverColor = String(formData.get("coverColor") ?? "2F3C7E").replace(/^#/, "");
+  const modulesRaw = String(formData.get("modules") ?? "[]");
+
+  if (!title) return { error: "El título es obligatorio." };
+  if (!description) return { error: "La descripción es obligatoria." };
+
+  let modules: ActivityModuleInput[];
+  try {
+    modules = JSON.parse(modulesRaw);
+  } catch {
+    return { error: "Los módulos no tienen un formato válido." };
+  }
+
+  if (modules.length === 0) return { error: "Agrega al menos un módulo." };
+  for (const m of modules) {
+    if (!m.title.trim()) return { error: "Cada módulo necesita un título." };
+    if (!m.content.trim()) return { error: "Cada módulo necesita contenido." };
+  }
+
+  const slug = await uniqueActivitySlug(title);
+
+  await db.activity.create({
+    data: {
+      slug,
+      title,
+      description,
+      coverColor,
+      published: true,
+      modules: {
+        create: modules.map((m, index) => ({
+          title: m.title.trim(),
+          content: m.content.trim(),
+          order: index,
+        })),
+      },
+    },
+  });
+
+  revalidatePath("/admin/activities");
+  redirect("/admin/activities");
+}
+
+export async function setActivityPublished(activityId: string, published: boolean) {
+  await requireAdmin();
+  await db.activity.update({ where: { id: activityId }, data: { published } });
+  revalidatePath("/admin/activities");
+}
+
+export async function deleteActivity(activityId: string) {
+  await requireAdmin();
+  await db.activity.delete({ where: { id: activityId } });
   revalidatePath("/admin/activities");
 }
 

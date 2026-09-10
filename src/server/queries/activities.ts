@@ -4,7 +4,7 @@ import { activityRegistry } from "@/activities/registry";
 export async function getVisibleActivities(userId: string, isAdmin: boolean) {
   const dbActivities = await db.activity.findMany({
     where: { published: true },
-    include: { groups: { include: { group: true } } },
+    include: { groups: { include: { group: true } }, modules: true },
   });
 
   const userGroupIds = isAdmin
@@ -25,7 +25,7 @@ export async function getVisibleActivities(userId: string, isAdmin: boolean) {
       const enrollment = enrollmentBySlug.get(activity.slug);
       return {
         ...activity,
-        moduleCount: config?.modules.length ?? 0,
+        moduleCount: config?.modules.length ?? activity.modules.length,
         completed: !!enrollment?.completedAt,
       };
     });

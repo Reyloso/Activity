@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getActivityConfig } from "@/activities/registry";
+import { getResolvedActivityConfig } from "@/server/queries/activity-content";
 import { generateCertificatePdf } from "@/lib/certificate-pdf";
 
 export async function GET(_req: Request, { params }: RouteContext<"/api/certificates/[activitySlug]">) {
@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: RouteContext<"/api/certific
   const session = await auth();
   if (!session?.user.id) return new NextResponse("No autenticado", { status: 401 });
 
-  const config = getActivityConfig(activitySlug);
+  const config = await getResolvedActivityConfig(activitySlug);
   if (!config) return new NextResponse("Actividad no encontrada", { status: 404 });
 
   const enrollment = await db.enrollment.findUnique({

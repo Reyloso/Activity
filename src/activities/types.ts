@@ -5,6 +5,7 @@ export type ModuleType = "content" | "interactive";
 export type ModuleProps = {
   onComplete: () => void;
   completed: boolean;
+  content?: string;
 };
 
 export type ModuleConfig = {
@@ -12,6 +13,7 @@ export type ModuleConfig = {
   title: string;
   type: ModuleType;
   Component: ComponentType<ModuleProps>;
+  content?: string;
 };
 
 export type ActivityConfig = {

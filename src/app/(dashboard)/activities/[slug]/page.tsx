@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getActivityAccess, getApprovedUsers } from "@/server/queries/activity-detail";
-import { getActivityConfig } from "@/activities/registry";
+import { getResolvedActivityConfig } from "@/server/queries/activity-content";
 import { ModuleViewer } from "@/components/activities/module-viewer";
 import { ApprovedAvatars } from "@/components/activities/approved-avatars";
 
@@ -10,7 +10,7 @@ export default async function ActivityDetailPage({ params }: PageProps<"/activit
   const session = await auth();
 
   const access = await getActivityAccess(slug, session!.user.id!, session!.user.role === "ADMIN");
-  const config = getActivityConfig(slug);
+  const config = await getResolvedActivityConfig(slug);
   if (!access || !config) notFound();
 
   const approvedUsers = await getApprovedUsers(slug);

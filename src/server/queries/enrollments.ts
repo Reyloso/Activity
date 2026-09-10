@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getActivityConfig } from "@/activities/registry";
+import { getResolvedActivityConfig } from "@/server/queries/activity-content";
 
 export async function getCompletedEnrollments(userId: string) {
   const enrollments = await db.enrollment.findMany({
@@ -7,11 +7,13 @@ export async function getCompletedEnrollments(userId: string) {
     orderBy: { completedAt: "desc" },
   });
 
-  return enrollments
-    .map((enrollment) => {
-      const config = getActivityConfig(enrollment.activitySlug);
+  const resolved = await Promise.all(
+    enrollments.map(async (enrollment) => {
+      const config = await getResolvedActivityConfig(enrollment.activitySlug);
       if (!config) return null;
       return { ...enrollment, activityTitle: config.title };
-    })
-    .filter((e): e is NonNullable<typeof e> => e !== null);
+    }),
+  );
+
+  return resolved.filter((e): e is NonNullable<typeof e> => e !== null);
 }

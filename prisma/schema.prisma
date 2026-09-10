@@ -57,7 +57,17 @@ model Activity {
   published   Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  groups ActivityGroup[]
+  groups  ActivityGroup[]
+  modules ActivityModule[]
+}
+
+model ActivityModule {
+  id         String   @id @default(cuid())
+  activityId String
+  activity   Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  title      String
+  content    String
+  order      Int
 }
 
 model ActivityGroup {
