@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { isRichContentEmpty } from "@/lib/rich-text";
 
 async function requireAdmin() {
   const session = await auth();
@@ -82,7 +83,6 @@ type QuestionInput = { text: string; points: number; options: OptionInput[] };
 type ActivityModuleInput = {
   title: string;
   content: string;
-  imageUrl: string;
   videoUrl: string;
   passingScore: number;
   questions: QuestionInput[];
@@ -112,8 +112,8 @@ export async function createActivity(
   if (modules.length === 0) return { error: "Agrega al menos un módulo." };
   for (const m of modules) {
     if (!m.title.trim()) return { error: "Cada módulo necesita un título." };
-    const hasContent = m.content.trim() || m.imageUrl.trim() || m.videoUrl.trim() || m.questions.length > 0;
-    if (!hasContent) return { error: `El módulo "${m.title}" necesita contenido, imagen, video o preguntas.` };
+    const hasContent = !isRichContentEmpty(m.content) || m.videoUrl.trim() || m.questions.length > 0;
+    if (!hasContent) return { error: `El módulo "${m.title}" necesita contenido, video o preguntas.` };
     for (const q of m.questions) {
       if (!q.text.trim()) return { error: "Cada pregunta necesita un texto." };
       if (q.options.length < 2 || q.options.some((o) => !o.text.trim())) {
@@ -140,8 +140,7 @@ export async function createActivity(
       modules: {
         create: modules.map((m, index) => ({
           title: m.title.trim(),
-          content: m.content.trim() || null,
-          imageUrl: m.imageUrl.trim() || null,
+          content: isRichContentEmpty(m.content) ? null : m.content,
           videoUrl: m.videoUrl.trim() || null,
           passingScore: m.questions.some((q) => q.points > 0) ? Math.round(m.passingScore) || 70 : null,
           order: index,

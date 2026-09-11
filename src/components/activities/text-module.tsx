@@ -5,24 +5,14 @@ import { CheckCircle2, XCircle } from "lucide-react";
 import type { ModuleProps } from "@/activities/types";
 import { Button } from "@/components/ui/button";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
+import { isRichContentEmpty } from "@/lib/rich-text";
 import { cn } from "@/lib/utils";
 
-function MediaPreview({ imageUrl, videoUrl }: { imageUrl?: string; videoUrl?: string }) {
+function MediaPreview({ videoUrl }: { videoUrl?: string }) {
   const embedUrl = videoUrl ? getVideoEmbedUrl(videoUrl) : null;
 
   return (
     <>
-      {imageUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={imageUrl}
-          alt=""
-          className="max-h-96 w-full rounded-lg border object-contain"
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      )}
       {videoUrl &&
         (embedUrl ? (
           <div className="aspect-video w-full overflow-hidden rounded-lg border">
@@ -141,14 +131,16 @@ function Quiz({
   );
 }
 
-export function TextModule({ content, imageUrl, videoUrl, questions, passingScore, onComplete, completed }: ModuleProps) {
+export function TextModule({ content, videoUrl, questions, passingScore, onComplete, completed }: ModuleProps) {
   const hasQuiz = !!questions && questions.length > 0;
 
   return (
     <div className="flex h-full min-h-[420px] flex-col justify-between gap-6 rounded-xl border p-6">
       <div className="flex flex-col gap-4">
-        {content && <div className="whitespace-pre-wrap text-sm leading-relaxed">{content}</div>}
-        <MediaPreview imageUrl={imageUrl} videoUrl={videoUrl} />
+        {!isRichContentEmpty(content) && (
+          <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: content! }} />
+        )}
+        <MediaPreview videoUrl={videoUrl} />
         {hasQuiz &&
           (completed ? (
             <div className="flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 text-sm font-medium text-emerald-700">

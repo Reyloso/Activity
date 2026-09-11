@@ -19,7 +19,6 @@ export type ModuleProps = {
   onComplete: () => void;
   completed: boolean;
   content?: string;
-  imageUrl?: string;
   videoUrl?: string;
   questions?: QuizQuestion[];
   passingScore?: number;
@@ -31,7 +30,6 @@ export type ModuleConfig = {
   type: ModuleType;
   Component: ComponentType<ModuleProps>;
   content?: string;
-  imageUrl?: string;
   videoUrl?: string;
   questions?: QuizQuestion[];
   passingScore?: number;

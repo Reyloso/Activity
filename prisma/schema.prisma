@@ -67,7 +67,6 @@ model ActivityModule {
   activity     Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   title        String
   content      String?
-  imageUrl     String?
   videoUrl     String?
   passingScore Int?
   order        Int
