@@ -7,6 +7,11 @@ server {
     listen 80;
     server_name teambuilding.milio.com.co;
 
+    # Las actividades personalizadas permiten pegar imágenes (guardadas como
+    # data URIs), que pueden pesar varios MB. Debe ser >= el bodySizeLimit de
+    # next.config.ts.
+    client_max_body_size 20m;
+
     # App Next.js
     location / {
         proxy_pass http://127.0.0.1:3000;
