@@ -88,12 +88,14 @@ type ActivityModuleInput = {
   questions: QuestionInput[];
 };
 
-export async function createActivity(
-  _prev: CreateActivityState,
-  formData: FormData,
-): Promise<CreateActivityState> {
-  await requireAdmin();
+type ParsedActivity = {
+  title: string;
+  description: string;
+  coverColor: string;
+  modules: ActivityModuleInput[];
+};
 
+function parseActivityFormData(formData: FormData): { error: string } | ParsedActivity {
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const coverColor = String(formData.get("coverColor") ?? "2F3C7E").replace(/^#/, "");
@@ -101,6 +103,9 @@ export async function createActivity(
 
   if (!title) return { error: "El título es obligatorio." };
   if (!description) return { error: "La descripción es obligatoria." };
+  if (modulesRaw.length > 15 * 1024 * 1024) {
+    return { error: "El contenido es demasiado grande. Reduce el tamaño o la cantidad de imágenes." };
+  }
 
   let modules: ActivityModuleInput[];
   try {
@@ -128,39 +133,83 @@ export async function createActivity(
     }
   }
 
-  const slug = await uniqueActivitySlug(title);
+  return { title, description, coverColor, modules };
+}
+
+function moduleCreateData(modules: ActivityModuleInput[]) {
+  return modules.map((m, index) => ({
+    title: m.title.trim(),
+    content: isRichContentEmpty(m.content) ? null : m.content,
+    videoUrl: m.videoUrl.trim() || null,
+    passingScore: m.questions.some((q) => q.points > 0) ? Math.round(m.passingScore) || 70 : null,
+    order: index,
+    questions: {
+      create: m.questions.map((q, qIndex) => ({
+        text: q.text.trim(),
+        points: Math.round(q.points),
+        order: qIndex,
+        options: {
+          create: q.options.map((o, oIndex) => ({
+            text: o.text.trim(),
+            isCorrect: o.isCorrect,
+            order: oIndex,
+          })),
+        },
+      })),
+    },
+  }));
+}
+
+export async function createActivity(
+  _prev: CreateActivityState,
+  formData: FormData,
+): Promise<CreateActivityState> {
+  await requireAdmin();
+
+  const parsed = parseActivityFormData(formData);
+  if ("error" in parsed) return parsed;
+
+  const slug = await uniqueActivitySlug(parsed.title);
 
   await db.activity.create({
     data: {
       slug,
-      title,
-      description,
-      coverColor,
+      title: parsed.title,
+      description: parsed.description,
+      coverColor: parsed.coverColor,
       published: true,
-      modules: {
-        create: modules.map((m, index) => ({
-          title: m.title.trim(),
-          content: isRichContentEmpty(m.content) ? null : m.content,
-          videoUrl: m.videoUrl.trim() || null,
-          passingScore: m.questions.some((q) => q.points > 0) ? Math.round(m.passingScore) || 70 : null,
-          order: index,
-          questions: {
-            create: m.questions.map((q, qIndex) => ({
-              text: q.text.trim(),
-              points: Math.round(q.points),
-              order: qIndex,
-              options: {
-                create: q.options.map((o, oIndex) => ({
-                  text: o.text.trim(),
-                  isCorrect: o.isCorrect,
-                  order: oIndex,
-                })),
-              },
-            })),
-          },
-        })),
-      },
+      modules: { create: moduleCreateData(parsed.modules) },
     },
+  });
+
+  revalidatePath("/admin/activities");
+  redirect("/admin/activities");
+}
+
+export async function updateActivity(
+  activityId: string,
+  _prev: CreateActivityState,
+  formData: FormData,
+): Promise<CreateActivityState> {
+  await requireAdmin();
+
+  const activity = await db.activity.findUnique({ where: { id: activityId } });
+  if (!activity) return { error: "La actividad no existe." };
+
+  const parsed = parseActivityFormData(formData);
+  if ("error" in parsed) return parsed;
+
+  await db.$transaction(async (tx) => {
+    await tx.activityModule.deleteMany({ where: { activityId } });
+    await tx.activity.update({
+      where: { id: activityId },
+      data: {
+        title: parsed.title,
+        description: parsed.description,
+        coverColor: parsed.coverColor,
+        modules: { create: moduleCreateData(parsed.modules) },
+      },
+    });
   });
 
   revalidatePath("/admin/activities");

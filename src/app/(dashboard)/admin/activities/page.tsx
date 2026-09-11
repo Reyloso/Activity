@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { db } from "@/lib/db";
 import { activityRegistry } from "@/activities/registry";
 import { PublishActivityButton } from "@/components/admin/publish-activity-button";
@@ -45,6 +45,14 @@ export default async function AdminActivitiesPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <ToggleActivityPublishedButton activityId={activity.id} initialPublished={activity.published} />
+                      <Button
+                        render={<Link href={`/admin/activities/${activity.id}/editar`} />}
+                        nativeButton={false}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <Pencil className="size-4" /> Editar
+                      </Button>
                       <DeleteActivityButton activityId={activity.id} activityTitle={activity.title} />
                     </div>
                   </div>

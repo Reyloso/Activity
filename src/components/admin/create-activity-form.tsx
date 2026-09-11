@@ -1,9 +1,10 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { createActivity, type CreateActivityState } from "@/server/actions/admin";
+import { createActivity, updateActivity, type CreateActivityState } from "@/server/actions/admin";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
+import { cn } from "@/lib/utils";
 import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,9 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type OptionDraft = { text: string; isCorrect: boolean };
-type QuestionDraft = { text: string; points: number; options: OptionDraft[] };
-type ModuleDraft = {
+export type OptionDraft = { text: string; isCorrect: boolean };
+export type QuestionDraft = { text: string; points: number; options: OptionDraft[] };
+export type ModuleDraft = {
   title: string;
   content: string;
   videoUrl: string;
@@ -37,6 +38,12 @@ function emptyQuestion(): QuestionDraft {
 }
 
 const initialState: CreateActivityState = { error: null };
+
+const MAX_CONTENT_BYTES = 15 * 1024 * 1024;
+
+function formatMb(bytes: number) {
+  return (bytes / (1024 * 1024)).toFixed(1);
+}
 
 function MediaFields({ module, update }: { module: ModuleDraft; update: (patch: Partial<ModuleDraft>) => void }) {
   const embedUrl = module.videoUrl ? getVideoEmbedUrl(module.videoUrl) : null;
@@ -146,10 +153,39 @@ function QuestionEditor({
   );
 }
 
-export function CreateActivityForm() {
-  const [modules, setModules] = useState<ModuleDraft[]>([emptyModule()]);
-  const [coverColor, setCoverColor] = useState("2F3C7E");
-  const [state, formAction, pending] = useActionState(createActivity, initialState);
+export function CreateActivityForm({
+  activityId,
+  initialTitle = "",
+  initialDescription = "",
+  initialCoverColor = "2F3C7E",
+  initialModules,
+}: {
+  activityId?: string;
+  initialTitle?: string;
+  initialDescription?: string;
+  initialCoverColor?: string;
+  initialModules?: ModuleDraft[];
+}) {
+  const isEdit = !!activityId;
+  const [modules, setModules] = useState<ModuleDraft[]>(initialModules ?? [emptyModule()]);
+  const [coverColor, setCoverColor] = useState(initialCoverColor);
+  const action = isEdit ? updateActivity.bind(null, activityId) : createActivity;
+  const [state, formAction, pending] = useActionState(action, initialState);
+  const [sizeError, setSizeError] = useState<string | null>(null);
+
+  const contentBytes = useMemo(() => new Blob([JSON.stringify(modules)]).size, [modules]);
+  const isOverLimit = contentBytes > MAX_CONTENT_BYTES;
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    if (contentBytes > MAX_CONTENT_BYTES) {
+      e.preventDefault();
+      setSizeError(
+        `El contenido pesa ${formatMb(contentBytes)} MB, el máximo permitido es ${formatMb(MAX_CONTENT_BYTES)} MB. Reduce el tamaño o la cantidad de imágenes.`,
+      );
+    } else {
+      setSizeError(null);
+    }
+  }
 
   function updateModule(index: number, patch: Partial<ModuleDraft>) {
     setModules((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)));
@@ -184,7 +220,7 @@ export function CreateActivityForm() {
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form action={formAction} onSubmit={handleSubmit} className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Datos generales</CardTitle>
@@ -192,11 +228,18 @@ export function CreateActivityForm() {
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="title">Título</Label>
-            <Input id="title" name="title" required maxLength={80} />
+            <Input id="title" name="title" required maxLength={80} defaultValue={initialTitle} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="description">Descripción</Label>
-            <Textarea id="description" name="description" required maxLength={300} rows={3} />
+            <Textarea
+              id="description"
+              name="description"
+              required
+              maxLength={300}
+              rows={3}
+              defaultValue={initialDescription}
+            />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="coverColor">Color de portada</Label>
@@ -290,10 +333,16 @@ export function CreateActivityForm() {
 
       <input type="hidden" name="modules" value={JSON.stringify(modules)} />
 
+      <p className={cn("text-xs", isOverLimit ? "font-medium text-destructive" : "text-muted-foreground")}>
+        Contenido: {formatMb(contentBytes)} MB de {formatMb(MAX_CONTENT_BYTES)} MB máximo (las imágenes pegadas
+        ocupan espacio).
+      </p>
+
+      {sizeError && <p className="text-sm text-destructive">{sizeError}</p>}
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
 
-      <Button type="submit" disabled={pending} className="w-fit">
-        {pending ? "Creando..." : "Crear actividad"}
+      <Button type="submit" disabled={pending || isOverLimit} className="w-fit">
+        {pending ? "Guardando..." : isEdit ? "Guardar cambios" : "Crear actividad"}
       </Button>
     </form>
   );

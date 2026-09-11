@@ -45,3 +45,20 @@ export async function getResolvedActivityConfig(slug: string): Promise<ActivityC
     })),
   };
 }
+
+export async function getActivityForEdit(activityId: string) {
+  return db.activity.findUnique({
+    where: { id: activityId },
+    include: {
+      modules: {
+        orderBy: { order: "asc" },
+        include: {
+          questions: {
+            orderBy: { order: "asc" },
+            include: { options: { orderBy: { order: "asc" } } },
+          },
+        },
+      },
+    },
+  });
+}
