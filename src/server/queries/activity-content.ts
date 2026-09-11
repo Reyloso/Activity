@@ -34,7 +34,6 @@ export async function getResolvedActivityConfig(slug: string): Promise<ActivityC
       type: "content" as const,
       Component: TextModule,
       content: m.content ?? undefined,
-      imageUrl: m.imageUrl ?? undefined,
       videoUrl: m.videoUrl ?? undefined,
       passingScore: m.passingScore ?? undefined,
       questions: m.questions.map((q) => ({

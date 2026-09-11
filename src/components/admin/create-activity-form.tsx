@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { createActivity, type CreateActivityState } from "@/server/actions/admin";
 import { getVideoEmbedUrl } from "@/lib/video-embed";
+import { RichTextEditor } from "@/components/admin/rich-text-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,14 +16,13 @@ type QuestionDraft = { text: string; points: number; options: OptionDraft[] };
 type ModuleDraft = {
   title: string;
   content: string;
-  imageUrl: string;
   videoUrl: string;
   passingScore: number;
   questions: QuestionDraft[];
 };
 
 function emptyModule(): ModuleDraft {
-  return { title: "", content: "", imageUrl: "", videoUrl: "", passingScore: 70, questions: [] };
+  return { title: "", content: "", videoUrl: "", passingScore: 70, questions: [] };
 }
 
 function emptyQuestion(): QuestionDraft {
@@ -43,25 +43,6 @@ function MediaFields({ module, update }: { module: ModuleDraft; update: (patch: 
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-2">
-        <Label>URL de imagen (opcional)</Label>
-        <Input
-          value={module.imageUrl}
-          onChange={(e) => update({ imageUrl: e.target.value })}
-          placeholder="https://..."
-        />
-        {module.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={module.imageUrl}
-            alt=""
-            className="max-h-56 w-fit rounded-lg border object-contain"
-            onError={(e) => {
-              e.currentTarget.style.opacity = "0.3";
-            }}
-          />
-        )}
-      </div>
       <div className="flex flex-col gap-2">
         <Label>URL de video de YouTube o Drive (opcional)</Label>
         <Input
@@ -255,12 +236,13 @@ export function CreateActivityForm() {
                 placeholder="Título del módulo"
                 required
               />
-              <Textarea
-                value={module.content}
-                onChange={(e) => updateModule(index, { content: e.target.value })}
-                placeholder="Contenido de texto (opcional)"
-                rows={4}
-              />
+              <div className="flex flex-col gap-1">
+                <Label>Contenido (opcional)</Label>
+                <RichTextEditor value={module.content} onChange={(html) => updateModule(index, { content: html })} />
+                <p className="text-xs text-muted-foreground">
+                  Puedes pegar imágenes directamente (Ctrl/Cmd+V) o usar el botón de imagen de la barra.
+                </p>
+              </div>
 
               <MediaFields module={module} update={(patch) => updateModule(index, patch)} />
 
