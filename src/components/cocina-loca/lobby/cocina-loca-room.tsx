@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import {
   DEFAULT_NUM_TEAMS,
   DEFAULT_TEAM_SIZE,
-  PLAYER_COLORS,
   type PlayerSummary,
   type RoomConfig,
   type TeamId,
@@ -104,10 +103,6 @@ export function CocinaLocaRoom({ code, isHost, myUserId }: { code: string; isHos
     getConnectedCocinaSocket()?.emit("room:start", { code });
   }
 
-  function handleDeliver(points: number) {
-    getConnectedCocinaSocket()?.emit("room:deliver", { code, points });
-  }
-
   function handleReturnToLobby() {
     getConnectedCocinaSocket()?.emit("room:returnToLobby", { code });
   }
@@ -136,7 +131,6 @@ export function CocinaLocaRoom({ code, isHost, myUserId }: { code: string; isHos
   }
 
   const me = players.find((p) => p.userId === myUserId);
-  const myColorHex = PLAYER_COLORS.find((c) => c.id === me?.colorId)?.hex ?? "#ef4444";
 
   return (
     <div className="flex w-full flex-col items-center gap-6">
@@ -161,11 +155,12 @@ export function CocinaLocaRoom({ code, isHost, myUserId }: { code: string; isHos
 
       {phase === "playing" && (
         <MatchView
+          code={code}
+          myUserId={myUserId}
+          myTeam={me?.team ?? null}
           scores={scores}
           numTeams={config.numTeams}
           timeLeftMs={timeLeftMs}
-          myColorHex={myColorHex}
-          onDeliver={handleDeliver}
         />
       )}
 

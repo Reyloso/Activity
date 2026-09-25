@@ -1,3 +1,5 @@
+import type { BoardItem, Carrying, EstufaId, MesonId, StoveSlot, TablaId } from "@/lib/kitchen-sim";
+
 export const MIN_TEAMS = 2;
 export const MAX_TEAMS = 6;
 export const MIN_TEAM_SIZE = 1;
@@ -37,6 +39,25 @@ export type RoomConfig = { numTeams: number; teamSize: number };
 
 export type RoomErrorPayload = { message: string };
 
+export type KitchenPlayerPublic = {
+  position: [number, number, number];
+  facing: number;
+  carrying: Carrying;
+  color: string;
+  message: string | null;
+};
+
+export type KitchenStatePayload = {
+  players: Record<string, KitchenPlayerPublic>;
+  boards: Record<TablaId, BoardItem>;
+  stoves: Record<EstufaId, StoveSlot>;
+  mesonSlots: Record<MesonId, Carrying>;
+  cleanPlates: number;
+  dirtyPlates: number;
+  washProgress: number;
+  orderSecondsLeft: number;
+};
+
 export function teamLabel(team: TeamId) {
   return `Equipo ${team}`;
 }
@@ -58,10 +79,12 @@ export type ClientToServerEvents = {
   "room:setTeam": (payload: { code: string; team: TeamId }) => void;
   "room:setColor": (payload: { code: string; colorId: string }) => void;
   "room:start": (payload: { code: string }) => void;
-  "room:deliver": (payload: { code: string; points: number }) => void;
   "room:returnToLobby": (payload: { code: string }) => void;
   "room:leave": (payload: { code: string }) => void;
   "room:sync": (payload: { code: string }) => void;
+  "kitchen:move": (payload: { code: string; dx: number; dz: number }) => void;
+  "kitchen:space": (payload: { code: string; held: boolean }) => void;
+  "kitchen:interact": (payload: { code: string }) => void;
 };
 
 export type ServerToClientEvents = {
@@ -77,4 +100,5 @@ export type ServerToClientEvents = {
   "room:returnedToLobby": () => void;
   "room:error": (payload: RoomErrorPayload) => void;
   "room:closed": () => void;
+  "kitchen:state": (payload: KitchenStatePayload) => void;
 };
