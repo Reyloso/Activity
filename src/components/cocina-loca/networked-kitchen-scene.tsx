@@ -1,17 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ChefCharacter } from "@/components/cocina-loca/chef-character";
 import { CarriedItem } from "@/components/cocina-loca/carried-item";
 import { KitchenHud } from "@/components/cocina-loca/kitchen-hud";
+import { KitchenBorder, KitchenFloor } from "@/components/cocina-loca/kitchen-environment";
+import { KitchenLoadingFallback } from "@/components/cocina-loca/kitchen-loading";
 import {
   AssemblyTable,
+  BurgerCrate,
   ChoppingBoard,
   DeliveryWindow,
+  DirtyPlateStack,
+  FishCrate,
   LettuceCrate,
+  OnionCrate,
   PairedBase,
   PlateStack,
+  ShrimpCrate,
   Sink,
   Stove,
   TomatoCrate,
@@ -20,15 +27,13 @@ import {
 import { getConnectedCocinaSocket } from "@/lib/cocina-socket-client";
 import type { KitchenStatePayload } from "@/lib/cocina-events";
 import {
-  ESTUFA_PAIR_WIDTH,
-  ESTUFA_PAIR_X,
   MESON_IDS,
   MESON_TABLE_CENTER_X,
   MESON_TABLE_WIDTH,
-  ORDER_SECONDS,
   STATIONS,
   TABLA_PAIR_WIDTH,
   TABLA_PAIR_X,
+  getRecipe,
   getTargetStation,
 } from "@/lib/kitchen-sim";
 
@@ -54,39 +59,6 @@ const KEY_TO_DIR: Record<string, [number, number]> = {
   d: [1, 0],
 };
 
-function KitchenFloor() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[HALF_W * 2 + 1, HALF_D * 2 + 1]} />
-      <meshStandardMaterial color="#e4c9a0" />
-    </mesh>
-  );
-}
-
-function BorderCounter({ position }: { position: [number, number, number] }) {
-  return (
-    <mesh position={[position[0], 0.35, position[2]]} castShadow receiveShadow>
-      <boxGeometry args={[0.9, 0.7, 0.9]} />
-      <meshStandardMaterial color="#8a5a3b" />
-    </mesh>
-  );
-}
-
-function KitchenBorder() {
-  const counters: [number, number, number][] = [];
-  for (let x = -HALF_W + 1; x <= HALF_W - 1; x += 1) counters.push([x, 0, HALF_D]);
-  for (let z = -HALF_D + 1; z <= HALF_D - 1; z += 1) {
-    counters.push([-HALF_W, 0, z]);
-    if (z !== 0) counters.push([HALF_W, 0, z]);
-  }
-  return (
-    <>
-      {counters.map((p, i) => (
-        <BorderCounter key={i} position={p} />
-      ))}
-    </>
-  );
-}
 
 const emptyState: KitchenStatePayload = {
   players: {},
@@ -95,8 +67,9 @@ const emptyState: KitchenStatePayload = {
   mesonSlots: { meson1: null, meson2: null, meson3: null, meson4: null },
   cleanPlates: 3,
   dirtyPlates: 0,
+  washQueue: 0,
   washProgress: 0,
-  orderSecondsLeft: ORDER_SECONDS,
+  orders: [],
 };
 
 export function NetworkedKitchenScene({ code, myUserId, score }: { code: string; myUserId: string; score: number }) {
@@ -179,30 +152,36 @@ export function NetworkedKitchenScene({ code, myUserId, score }: { code: string;
 
   const me = state.players[myUserId];
   const targetLabel = me ? (getTargetStation(me.position, me.facing)?.label ?? null) : null;
+  const orders = state.orders.map((o) => ({ ...getRecipe(o.recipeId), secondsLeft: o.secondsLeft }));
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-xl border bg-black">
-      <Canvas shadows camera={{ position: cameraPosition, fov: 38 }}>
+      <Canvas shadows="percentage" camera={{ position: cameraPosition, fov: 38 }}>
         <color attach="background" args={["#1b1330"]} />
         <FixedOverheadCamera />
         <ambientLight intensity={0.6} />
         <directionalLight position={[4, 10, 4]} intensity={1.1} castShadow />
+        <Suspense fallback={<KitchenLoadingFallback />}>
         <group>
-          <KitchenFloor />
-          <KitchenBorder />
+          <KitchenFloor width={HALF_W * 2 + 1} depth={HALF_D * 2 + 1} />
+          <KitchenBorder halfW={HALF_W} halfD={HALF_D} />
           <LettuceCrate position={[-5, -4]} />
           <TomatoCrate position={[-3.3, -4]} />
+          <OnionCrate position={[4.3, -4]} />
           <PairedBase x={TABLA_PAIR_X} z={-4} width={TABLA_PAIR_WIDTH} />
-          <ChoppingBoard position={[-1.5, -4]} label="Tabla 1" item={state.boards.tabla1} chopProgress={state.boards.tabla1?.chopProgress ?? 0} />
-          <ChoppingBoard position={[-0.5, -4]} label="Tabla 2" item={state.boards.tabla2} chopProgress={state.boards.tabla2?.chopProgress ?? 0} />
-          <PairedBase x={ESTUFA_PAIR_X} z={-4} width={ESTUFA_PAIR_WIDTH} />
-          <Stove position={[1.5, -4]} label="Estufa 1" slot={state.stoves.estufa1} />
-          <Stove position={[2.5, -4]} label="Estufa 2" slot={state.stoves.estufa2} />
+          <ChoppingBoard position={[-1.5, -4]} item={state.boards.tabla1} chopProgress={state.boards.tabla1?.chopProgress ?? 0} />
+          <ChoppingBoard position={[-0.5, -4]} item={state.boards.tabla2} chopProgress={state.boards.tabla2?.chopProgress ?? 0} />
+          <Stove position={[1.5, -4]} slot={state.stoves.estufa1} />
+          <Stove position={[2.5, -4]} slot={state.stoves.estufa2} />
           <PlateStack position={[-5, 0]} cleanPlates={state.cleanPlates} />
-          <Sink position={[-3.3, 0]} dirtyPlates={state.dirtyPlates} washProgress={state.washProgress} />
+          <Sink position={[-3.3, 0]} washQueue={state.washQueue} washProgress={state.washProgress} />
+          <DirtyPlateStack position={[-4.16, 0]} count={state.dirtyPlates} />
           <TrashBin position={[-1.6, 0]} />
           <AssemblyTable position={[MESON_TABLE_CENTER_X, 0]} width={MESON_TABLE_WIDTH} slots={mesonSlotsForTable} />
-          <DeliveryWindow position={[7, 0]} rotationY={-Math.PI / 2} />
+          <DeliveryWindow position={[7, 0]} />
+          <ShrimpCrate position={[3, 4]} />
+          <FishCrate position={[4, 4]} />
+          <BurgerCrate position={[5, 4]} />
           {Object.entries(state.players).map(([userId, player]) => (
             <group key={userId}>
               {userId === myUserId && (
@@ -216,10 +195,11 @@ export function NetworkedKitchenScene({ code, myUserId, score }: { code: string;
             </group>
           ))}
         </group>
+        </Suspense>
       </Canvas>
       <KitchenHud
         score={score}
-        orderSecondsLeft={state.orderSecondsLeft}
+        orders={orders}
         carrying={me?.carrying ?? null}
         targetLabel={targetLabel}
         message={me?.message ?? null}

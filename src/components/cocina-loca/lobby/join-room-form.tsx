@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LogIn } from "lucide-react";
 import { getCocinaSocketToken } from "@/server/actions/cocina";
-import { getCocinaSocket } from "@/lib/cocina-socket-client";
+import { emitWithTimeout, getCocinaSocket } from "@/lib/cocina-socket-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -20,19 +20,21 @@ export function JoinRoomForm() {
     setError(null);
 
     startTransition(async () => {
-      const token = await getCocinaSocketToken();
-      const socket = getCocinaSocket(token);
       const normalized = code.trim().toUpperCase();
+      try {
+        const token = await getCocinaSocketToken();
+        const socket = getCocinaSocket(token);
 
-      const res = await new Promise<{ ok: true } | { error: string }>((resolve) => {
-        socket.emit("room:join", { code: normalized }, resolve);
-      });
+        const res = await emitWithTimeout<{ ok: true } | { error: string }>(socket, "room:join", { code: normalized });
 
-      if ("error" in res) {
-        setError(res.error);
-        return;
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
+        router.push(`/didacticas/cocina-loca/room/${normalized}`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo unir a la sala.");
       }
-      router.push(`/didacticas/cocina-loca/room/${normalized}`);
     });
   }
 

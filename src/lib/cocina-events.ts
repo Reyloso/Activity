@@ -1,4 +1,5 @@
-import type { BoardItem, Carrying, EstufaId, MesonId, StoveSlot, TablaId } from "@/lib/kitchen-sim";
+import type { ActiveOrder, BoardItem, Carrying, EstufaId, MesonId, StoveSlot, TablaId } from "@/lib/kitchen-sim";
+import { DEFAULT_RECIPE_IDS } from "@/lib/kitchen-sim";
 
 export const MIN_TEAMS = 2;
 export const MAX_TEAMS = 6;
@@ -35,7 +36,9 @@ export type TeamScores = Record<TeamId, number>;
 
 export type RoomStatus = "lobby" | "playing" | "finished";
 
-export type RoomConfig = { numTeams: number; teamSize: number };
+export type RoomConfig = { numTeams: number; teamSize: number; enabledRecipeIds: string[] };
+
+export const DEFAULT_ENABLED_RECIPE_IDS = DEFAULT_RECIPE_IDS;
 
 export type RoomErrorPayload = { message: string };
 
@@ -54,8 +57,9 @@ export type KitchenStatePayload = {
   mesonSlots: Record<MesonId, Carrying>;
   cleanPlates: number;
   dirtyPlates: number;
+  washQueue: number;
   washProgress: number;
-  orderSecondsLeft: number;
+  orders: ActiveOrder[];
 };
 
 export function teamLabel(team: TeamId) {
@@ -76,9 +80,10 @@ export type ClientToServerEvents = {
   "room:create": (ack: (res: { code: string } | { error: string }) => void) => void;
   "room:join": (payload: { code: string }, ack: (res: { ok: true } | { error: string }) => void) => void;
   "room:setConfig": (payload: { code: string; numTeams: number; teamSize: number }) => void;
+  "room:setRecipes": (payload: { code: string; recipeIds: string[] }) => void;
   "room:setTeam": (payload: { code: string; team: TeamId }) => void;
-  "room:setColor": (payload: { code: string; colorId: string }) => void;
   "room:start": (payload: { code: string }) => void;
+  "room:restartMatch": (payload: { code: string }) => void;
   "room:returnToLobby": (payload: { code: string }) => void;
   "room:leave": (payload: { code: string }) => void;
   "room:sync": (payload: { code: string }) => void;

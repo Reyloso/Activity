@@ -10,6 +10,7 @@ export function FinalResults({
   winner,
   isHost,
   onReturnToLobby,
+  onRestartMatch,
   onLeave,
 }: {
   scores: TeamScores;
@@ -17,6 +18,7 @@ export function FinalResults({
   winner: TeamId | "empate";
   isHost: boolean;
   onReturnToLobby: () => void;
+  onRestartMatch: () => void;
   onLeave: () => void;
 }) {
   return (
@@ -38,9 +40,19 @@ export function FinalResults({
           Salir
         </Button>
         {isHost && (
-          <Button type="button" onClick={onReturnToLobby} className="bg-white text-violet-700 hover:bg-white/90">
-            Volver al lobby
-          </Button>
+          <>
+            <Button type="button" onClick={onRestartMatch} className="bg-white text-violet-700 hover:bg-white/90">
+              Reiniciar partida
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onReturnToLobby}
+              className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+            >
+              Volver al lobby
+            </Button>
+          </>
         )}
       </div>
     </div>

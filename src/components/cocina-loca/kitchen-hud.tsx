@@ -1,6 +1,7 @@
 "use client";
 
 import type { Carrying } from "@/components/cocina-loca/game-types";
+import { cn } from "@/lib/utils";
 
 const CARRYING_LABEL: Record<string, (c: Extract<Carrying, object>) => string> = {
   ingrediente: (c) => {
@@ -22,15 +23,17 @@ const CARRYING_LABEL: Record<string, (c: Extract<Carrying, object>) => string> =
   platoSucio: () => "Plato sucio",
 };
 
+export type HudOrder = { label: string; description: string; secondsLeft: number };
+
 export function KitchenHud({
   score,
-  orderSecondsLeft,
+  orders,
   carrying,
   targetLabel,
   message,
 }: {
   score: number;
-  orderSecondsLeft: number;
+  orders: HudOrder[];
   carrying: Carrying;
   targetLabel: string | null;
   message: string | null;
@@ -38,19 +41,28 @@ export function KitchenHud({
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3 text-sm text-white">
       <div className="flex items-start justify-between">
-        <div className="rounded-lg bg-black/50 px-3 py-2 backdrop-blur-sm">
-          <p className="font-semibold">Pedido: Ensalada con salsa</p>
-          <p className="text-xs text-white/80">Lechuga picada + tomate picado y cocinado, en un plato</p>
+        <div className="flex flex-col gap-1">
+          {orders.map((order, i) => (
+            <div
+              key={`${order.label}-${i}`}
+              title={order.description}
+              className="pointer-events-auto flex w-fit items-center gap-2 rounded-full bg-black/50 py-1 pr-2.5 pl-1 backdrop-blur-sm"
+            >
+              <span className="text-sm leading-none">🧾</span>
+              <span className="max-w-36 truncate text-xs font-semibold">{order.label}</span>
+              <span
+                className={cn(
+                  "font-mono text-xs font-semibold",
+                  order.secondsLeft <= 10 ? "text-red-400" : "text-white/70",
+                )}
+              >
+                {Math.ceil(order.secondsLeft)}s
+              </span>
+            </div>
+          ))}
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <div className="rounded-lg bg-black/50 px-3 py-2 text-right backdrop-blur-sm">
-            <p className="font-semibold">Puntaje: {score}</p>
-          </div>
-          <div className="rounded-lg bg-black/50 px-3 py-2 text-right backdrop-blur-sm">
-            <p className={orderSecondsLeft <= 10 ? "font-semibold text-red-400" : "font-semibold"}>
-              ⏱ {Math.ceil(orderSecondsLeft)}s
-            </p>
-          </div>
+        <div className="rounded-lg bg-black/50 px-3 py-2 text-right backdrop-blur-sm">
+          <p className="font-semibold">Puntaje: {score}</p>
         </div>
       </div>
 

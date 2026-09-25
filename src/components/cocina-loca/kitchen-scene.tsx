@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { ChefCharacter } from "@/components/cocina-loca/chef-character";
 import { CarriedItem } from "@/components/cocina-loca/carried-item";
+import { KitchenBorder, KitchenFloor } from "@/components/cocina-loca/kitchen-environment";
+import { KitchenLoadingFallback } from "@/components/cocina-loca/kitchen-loading";
 import { KitchenHud } from "@/components/cocina-loca/kitchen-hud";
 import {
   AssemblyTable,
   ChoppingBoard,
   DeliveryWindow,
+  DirtyPlateStack,
   LettuceCrate,
   PairedBase,
   PlateStack,
@@ -18,6 +21,7 @@ import {
   TrashBin,
 } from "@/components/cocina-loca/stations";
 import {
+  BURN_PENALTY,
   CHOP_TARGET,
   COOK_BURN_AT,
   COOK_DONE_AT,
@@ -28,6 +32,7 @@ import {
   WASH_TARGET,
   initialGameState,
   plateMatchesRecipe,
+  plateValue,
   type Carrying,
   type EstufaId,
   type GameState,
@@ -53,6 +58,7 @@ type RenderSnapshot = {
   mesonSlots: GameState["mesonSlots"];
   cleanPlates: number;
   dirtyPlates: number;
+  washQueue: number;
   washProgress: number;
   chopProgress: number;
   chopTargetId: TablaId | null;
@@ -95,6 +101,7 @@ const STATIONS: { id: StationId; x: number; z: number; label: string; rotationY?
   { id: "estufa1", x: 1.5, z: -4, label: "Estufa 1" },
   { id: "estufa2", x: 2.5, z: -4, label: "Estufa 2" },
   { id: "platos", x: -5, z: 0, label: "Platos" },
+  { id: "platosSucios", x: -4.16, z: 0, label: "Platos sucios" },
   { id: "lavaplatos", x: -3.3, z: 0, label: "Lavaplatos" },
   { id: "basura", x: -1.6, z: 0, label: "Basura" },
   { id: "meson1", x: 1, z: 0, label: "Mesón" },
@@ -124,6 +131,7 @@ OBSTACLES.push({ x: TABLA_PAIR_X, z: -4, hw: TABLA_PAIR_WIDTH / 2, hd: 0.44 });
 OBSTACLES.push({ x: ESTUFA_PAIR_X, z: -4, hw: ESTUFA_PAIR_WIDTH / 2, hd: 0.44 });
 // Fila intermedia
 OBSTACLES.push({ x: -5, z: 0, hw: 0.44, hd: 0.44 });
+OBSTACLES.push({ x: -4.16, z: 0, hw: 0.35, hd: 0.28 });
 OBSTACLES.push({ x: -3.3, z: 0, hw: 0.44, hd: 0.44 });
 OBSTACLES.push({ x: -1.6, z: 0, hw: 0.44, hd: 0.44 });
 // Mesón
@@ -142,41 +150,6 @@ function collides(x: number, z: number) {
   return false;
 }
 
-function KitchenFloor() {
-  return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <planeGeometry args={[HALF_W * 2 + 1, HALF_D * 2 + 1]} />
-      <meshStandardMaterial color="#e4c9a0" />
-    </mesh>
-  );
-}
-
-function BorderCounter({ position }: { position: [number, number, number] }) {
-  return (
-    <mesh position={[position[0], 0.35, position[2]]} castShadow receiveShadow>
-      <boxGeometry args={[0.9, 0.7, 0.9]} />
-      <meshStandardMaterial color="#8a5a3b" />
-    </mesh>
-  );
-}
-
-function KitchenBorder() {
-  const counters: [number, number, number][] = [];
-  for (let x = -HALF_W + 1; x <= HALF_W - 1; x += 1) {
-    counters.push([x, 0, HALF_D]);
-  }
-  for (let z = -HALF_D + 1; z <= HALF_D - 1; z += 1) {
-    counters.push([-HALF_W, 0, z]);
-    if (z !== 0) counters.push([HALF_W, 0, z]); // hueco en el muro este para la ventana de entrega
-  }
-  return (
-    <>
-      {counters.map((p, i) => (
-        <BorderCounter key={i} position={p} />
-      ))}
-    </>
-  );
-}
 
 function getTargetStation(pos: [number, number, number], facing: number) {
   const fx = Math.sin(facing);
@@ -221,6 +194,7 @@ export function KitchenScene({
     mesonSlots: { meson1: null, meson2: null, meson3: null, meson4: null },
     cleanPlates: 3,
     dirtyPlates: 0,
+    washQueue: 0,
     washProgress: 0,
     chopProgress: 0,
     chopTargetId: null,
@@ -285,7 +259,7 @@ export function KitchenScene({
           showMessage("Tienes las manos ocupadas.");
         }
       } else if (board === null && g.carrying?.kind === "ingrediente") {
-        g.boards[id] = { ingredient: g.carrying.ingrediente, chopped: g.carrying.chopped };
+        g.boards[id] = { ingredient: g.carrying.ingrediente, chopped: g.carrying.chopped, chopProgress: 0 };
         g.carrying = null;
       }
     }
@@ -356,6 +330,15 @@ export function KitchenScene({
         g.carrying = null;
         return;
       }
+      if (
+        g.carrying.kind === "ingrediente" &&
+        g.carrying.ingrediente === "tomate" &&
+        g.carrying.chopped &&
+        slot.kind === "plato"
+      ) {
+        showMessage("Ese ingrediente necesita cocinarse primero.");
+        return;
+      }
       showMessage("Tienes las manos ocupadas.");
     }
 
@@ -400,16 +383,38 @@ export function KitchenScene({
 
       if (stationId === "entrega") {
         if (g.carrying?.kind === "plato") {
-          if (plateMatchesRecipe(g.carrying.contenido)) {
-            g.score += 100;
-            g.dirtyPlates += 1;
-            g.carrying = null;
+          const contenido = g.carrying.contenido;
+          g.dirtyPlates += 1;
+          g.carrying = null;
+          if (plateMatchesRecipe(contenido)) {
+            const points = plateValue(contenido);
+            g.score += points;
             g.orderSecondsLeft = ORDER_SECONDS;
-            showMessage("¡Entregado! +100");
-            onDeliverRef.current?.(100);
+            showMessage(`¡Entregado! +${points}`);
+            onDeliverRef.current?.(points);
           } else {
-            showMessage("Ese plato no es lo que piden.");
+            const penalty = plateValue(contenido);
+            g.score = Math.max(0, g.score - penalty);
+            showMessage(`Plato incompleto: -${penalty}`);
           }
+        }
+        return;
+      }
+
+      if (stationId === "platosSucios") {
+        if (g.carrying === null && g.dirtyPlates > 0) {
+          g.carrying = { kind: "platoSucio" };
+          g.dirtyPlates -= 1;
+        } else if (g.carrying === null) {
+          showMessage("No hay platos sucios aquí.");
+        }
+        return;
+      }
+
+      if (stationId === "lavaplatos") {
+        if (g.carrying?.kind === "platoSucio") {
+          g.washQueue += 1;
+          g.carrying = null;
         }
         return;
       }
@@ -480,10 +485,10 @@ export function KitchenScene({
       }
 
       // Lavar (mantener espacio sobre el lavaplatos con platos sucios pendientes)
-      if (spaceHeldRef.current && target?.id === "lavaplatos" && g.dirtyPlates > 0 && g.carrying === null) {
+      if (spaceHeldRef.current && target?.id === "lavaplatos" && g.washQueue > 0 && g.carrying === null) {
         g.washProgress += dt;
         if (g.washProgress >= WASH_TARGET) {
-          g.dirtyPlates -= 1;
+          g.washQueue -= 1;
           g.cleanPlates += 1;
           g.washProgress = 0;
         }
@@ -498,6 +503,7 @@ export function KitchenScene({
           slot.content.progress += dt;
           if (slot.content.progress >= COOK_BURN_AT) {
             slot.content.state = "quemado";
+            g.score = Math.max(0, g.score - BURN_PENALTY);
           } else if (slot.content.progress >= COOK_DONE_AT) {
             slot.content.state = "listo";
           }
@@ -520,6 +526,7 @@ export function KitchenScene({
         mesonSlots: { ...g.mesonSlots },
         cleanPlates: g.cleanPlates,
         dirtyPlates: g.dirtyPlates,
+        washQueue: g.washQueue,
         washProgress: g.washProgress,
         chopProgress: g.chopProgress,
         chopTargetId:
@@ -545,44 +552,50 @@ export function KitchenScene({
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-xl border bg-black">
-      <Canvas shadows camera={{ position: cameraPosition, fov: 38 }}>
+      <Canvas shadows="percentage" camera={{ position: cameraPosition, fov: 38 }}>
         <color attach="background" args={["#1b1330"]} />
         <FixedOverheadCamera />
         <ambientLight intensity={0.6} />
         <directionalLight position={[4, 10, 4]} intensity={1.1} castShadow />
+        <Suspense fallback={<KitchenLoadingFallback />}>
         <group>
-          <KitchenFloor />
-          <KitchenBorder />
+          <KitchenFloor width={HALF_W * 2 + 1} depth={HALF_D * 2 + 1} />
+          <KitchenBorder halfW={HALF_W} halfD={HALF_D} />
           <LettuceCrate position={[-5, -4]} />
           <TomatoCrate position={[-3.3, -4]} />
           <PairedBase x={TABLA_PAIR_X} z={-4} width={TABLA_PAIR_WIDTH} />
           <ChoppingBoard
             position={[-1.5, -4]}
-            label="Tabla 1"
             item={snapshot.boards.tabla1}
             chopProgress={snapshot.chopTargetId === "tabla1" ? snapshot.chopProgress : 0}
           />
           <ChoppingBoard
             position={[-0.5, -4]}
-            label="Tabla 2"
             item={snapshot.boards.tabla2}
             chopProgress={snapshot.chopTargetId === "tabla2" ? snapshot.chopProgress : 0}
           />
-          <PairedBase x={ESTUFA_PAIR_X} z={-4} width={ESTUFA_PAIR_WIDTH} />
-          <Stove position={[1.5, -4]} label="Estufa 1" slot={snapshot.stoves.estufa1} />
-          <Stove position={[2.5, -4]} label="Estufa 2" slot={snapshot.stoves.estufa2} />
+          <Stove position={[1.5, -4]} slot={snapshot.stoves.estufa1} />
+          <Stove position={[2.5, -4]} slot={snapshot.stoves.estufa2} />
           <PlateStack position={[-5, 0]} cleanPlates={snapshot.cleanPlates} />
-          <Sink position={[-3.3, 0]} dirtyPlates={snapshot.dirtyPlates} washProgress={snapshot.washProgress} />
+          <Sink position={[-3.3, 0]} washQueue={snapshot.washQueue} washProgress={snapshot.washProgress} />
+          <DirtyPlateStack position={[-4.16, 0]} count={snapshot.dirtyPlates} />
           <TrashBin position={[-1.6, 0]} />
           <AssemblyTable position={[MESON_TABLE_CENTER_X, 0]} width={MESON_TABLE_WIDTH} slots={mesonSlotsForTable} />
-          <DeliveryWindow position={[7, 0]} rotationY={-Math.PI / 2} />
+          <DeliveryWindow position={[7, 0]} />
           <ChefCharacter color={color} position={snapshot.position} facing={snapshot.facing} />
           <CarriedItem carrying={snapshot.carrying} position={snapshot.position} facing={snapshot.facing} />
         </group>
+        </Suspense>
       </Canvas>
       <KitchenHud
         score={snapshot.score}
-        orderSecondsLeft={snapshot.orderSecondsLeft}
+        orders={[
+          {
+            label: "Ensalada con salsa",
+            description: "Lechuga picada + tomate picado y cocinado, en un plato",
+            secondsLeft: snapshot.orderSecondsLeft,
+          },
+        ]}
         carrying={snapshot.carrying}
         targetLabel={snapshot.targetLabel}
         message={snapshot.message}

@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { Server, type Socket } from "socket.io";
 import { verifyCocinaSocketToken } from "@/lib/cocina-auth";
 import {
+  DEFAULT_ENABLED_RECIPE_IDS,
   DEFAULT_NUM_TEAMS,
   DEFAULT_TEAM_SIZE,
   MATCH_DURATION_MS,
@@ -21,7 +22,15 @@ import {
   type TeamId,
   type TeamScores,
 } from "@/lib/cocina-events";
-import { addPlayer, createKitchenState, removePlayer, tickKitchen, type KitchenState, type PlayerInput } from "@/lib/kitchen-sim";
+import {
+  RECIPES,
+  addPlayer,
+  createKitchenState,
+  removePlayer,
+  tickKitchen,
+  type KitchenState,
+  type PlayerInput,
+} from "@/lib/kitchen-sim";
 
 type Player = {
   userId: string;
@@ -37,6 +46,7 @@ type RoomState = {
   status: "lobby" | "playing" | "finished";
   numTeams: number;
   teamSize: number;
+  enabledRecipeIds: string[];
   players: Map<string, Player>;
   scores: TeamScores;
   matchEndsAt: number | null;
@@ -63,7 +73,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function roomConfig(room: RoomState): RoomConfig {
-  return { numTeams: room.numTeams, teamSize: room.teamSize };
+  return { numTeams: room.numTeams, teamSize: room.teamSize, enabledRecipeIds: room.enabledRecipeIds };
 }
 
 function playerSummaries(room: RoomState): PlayerSummary[] {
@@ -123,6 +133,16 @@ function colorHex(colorId: string | null) {
   return PLAYER_COLORS.find((c) => c.id === colorId)?.hex ?? "#ef4444";
 }
 
+/** Elige un color al azar no usado por otro jugador del mismo equipo. */
+function pickAvailableColor(room: RoomState, team: TeamId): string {
+  const takenInTeam = new Set(
+    [...room.players.values()].filter((p) => p.team === team).map((p) => p.colorId),
+  );
+  const available = PLAYER_COLORS.filter((c) => !takenInTeam.has(c.id));
+  const pool = available.length > 0 ? available : PLAYER_COLORS;
+  return pool[Math.floor(Math.random() * pool.length)].id;
+}
+
 function publicKitchenState(kitchen: KitchenState): KitchenStatePayload {
   const players: KitchenStatePayload["players"] = {};
   for (const [userId, p] of Object.entries(kitchen.players)) {
@@ -135,8 +155,9 @@ function publicKitchenState(kitchen: KitchenState): KitchenStatePayload {
     mesonSlots: kitchen.mesonSlots,
     cleanPlates: kitchen.cleanPlates,
     dirtyPlates: kitchen.dirtyPlates,
+    washQueue: kitchen.washQueue,
     washProgress: kitchen.washProgress,
-    orderSecondsLeft: kitchen.orderSecondsLeft,
+    orders: kitchen.orders,
   };
 }
 
@@ -156,7 +177,7 @@ function startKitchens(io: Server<ClientToServerEvents, ServerToClientEvents>, r
   }
 
   for (const [team, teamPlayers] of byTeam) {
-    const kitchen = createKitchenState();
+    const kitchen = createKitchenState(room.enabledRecipeIds);
     teamPlayers.forEach((p, i) => {
       addPlayer(kitchen, p.userId, colorHex(p.colorId), i);
       const socket = io.sockets.sockets.get(p.socketId);
@@ -192,6 +213,17 @@ function startKitchens(io: Server<ClientToServerEvents, ServerToClientEvents>, r
     }
     if (scoresChanged) io.to(room.code).emit("room:scores", { scores: room.scores });
   }, 50);
+}
+
+function startMatch(io: Server<ClientToServerEvents, ServerToClientEvents>, room: RoomState) {
+  stopKitchens(room);
+  if (room.timer) clearTimeout(room.timer);
+  room.status = "playing";
+  room.scores = emptyScoresFor(room.numTeams);
+  room.matchEndsAt = Date.now() + MATCH_DURATION_MS;
+  io.to(room.code).emit("room:started", { matchEndsAt: room.matchEndsAt, scores: room.scores });
+  startKitchens(io, room);
+  room.timer = setTimeout(() => finishMatch(io, room), MATCH_DURATION_MS);
 }
 
 function finishMatch(io: Server<ClientToServerEvents, ServerToClientEvents>, room: RoomState) {
@@ -253,6 +285,7 @@ export function createCocinaServer() {
         status: "lobby",
         numTeams: DEFAULT_NUM_TEAMS,
         teamSize: DEFAULT_TEAM_SIZE,
+        enabledRecipeIds: DEFAULT_ENABLED_RECIPE_IDS,
         players: new Map([[userId, { userId, name, socketId: socket.id, team: null, colorId: null }]]),
         scores: emptyScoresFor(DEFAULT_NUM_TEAMS),
         matchEndsAt: null,
@@ -319,6 +352,14 @@ export function createCocinaServer() {
       emitPlayersUpdate(io, room);
     });
 
+    socket.on("room:setRecipes", ({ code, recipeIds }) => {
+      const room = rooms.get(code);
+      if (!room || room.hostUserId !== userId || room.status !== "lobby") return;
+      const valid = recipeIds.filter((id) => RECIPES.some((r) => r.id === id));
+      room.enabledRecipeIds = valid.length > 0 ? valid : DEFAULT_ENABLED_RECIPE_IDS;
+      emitPlayersUpdate(io, room);
+    });
+
     socket.on("room:setTeam", ({ code, team }) => {
       const room = rooms.get(code);
       if (!room || room.status !== "lobby") return;
@@ -330,28 +371,7 @@ export function createCocinaServer() {
         return;
       }
       player.team = team;
-      if (
-        player.colorId &&
-        [...room.players.values()].some((p) => p.userId !== userId && p.team === team && p.colorId === player.colorId)
-      ) {
-        player.colorId = null;
-      }
-      emitPlayersUpdate(io, room);
-    });
-
-    socket.on("room:setColor", ({ code, colorId }) => {
-      const room = rooms.get(code);
-      if (!room || room.status !== "lobby") return;
-      const player = room.players.get(userId);
-      if (!player || !PLAYER_COLORS.some((c) => c.id === colorId)) return;
-      const taken = [...room.players.values()].some(
-        (p) => p.userId !== userId && p.team === player.team && p.colorId === colorId,
-      );
-      if (taken) {
-        socket.emit("room:error", { message: "Ese color ya lo tiene alguien de tu equipo." });
-        return;
-      }
-      player.colorId = colorId;
+      player.colorId = pickAvailableColor(room, team);
       emitPlayersUpdate(io, room);
     });
 
@@ -370,14 +390,26 @@ export function createCocinaServer() {
         return;
       }
 
-      room.status = "playing";
-      room.scores = emptyScoresFor(room.numTeams);
-      room.matchEndsAt = Date.now() + MATCH_DURATION_MS;
-      io.to(room.code).emit("room:started", { matchEndsAt: room.matchEndsAt, scores: room.scores });
-      startKitchens(io, room);
+      startMatch(io, room);
+    });
 
-      if (room.timer) clearTimeout(room.timer);
-      room.timer = setTimeout(() => finishMatch(io, room), MATCH_DURATION_MS);
+    socket.on("room:restartMatch", ({ code }) => {
+      const room = rooms.get(code);
+      if (!room || room.hostUserId !== userId) return;
+      if (room.status !== "playing" && room.status !== "finished") return;
+
+      const players = [...room.players.values()];
+      if (players.some((p) => !p.team || !p.colorId)) {
+        socket.emit("room:error", { message: "Todos deben elegir equipo y color antes de iniciar." });
+        return;
+      }
+      const usedTeams = new Set(players.map((p) => p.team));
+      if (usedTeams.size < 2) {
+        socket.emit("room:error", { message: "Necesitas jugadores repartidos en al menos 2 equipos." });
+        return;
+      }
+
+      startMatch(io, room);
     });
 
     socket.on("kitchen:move", ({ code, dx, dz }) => {

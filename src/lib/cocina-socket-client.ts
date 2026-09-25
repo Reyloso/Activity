@@ -31,3 +31,44 @@ export function getConnectedCocinaSocket(): CocinaSocket | null {
   const socket = window.__cocinaSocket;
   return socket && socket.connected ? socket : null;
 }
+
+const CONNECT_TIMEOUT_MS = 8000;
+
+/**
+ * Emits an event and resolves with the ack, but rejects if the socket never
+ * connects (network blocked, wrong server URL, etc.) instead of hanging forever.
+ */
+export function emitWithTimeout<T>(socket: CocinaSocket, event: string, payload?: unknown): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const onConnectError = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error(`No se pudo conectar al servidor de la sala (${err.message}).`));
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("No se pudo conectar al servidor de la sala (tiempo de espera agotado)."));
+    }, CONNECT_TIMEOUT_MS);
+    function cleanup() {
+      clearTimeout(timer);
+      socket.off("connect_error", onConnectError);
+    }
+    socket.on("connect_error", onConnectError);
+    const ack = (res: T) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(res);
+    };
+    const emit = socket.emit.bind(socket) as (...args: unknown[]) => void;
+    if (payload === undefined) {
+      emit(event, ack);
+    } else {
+      emit(event, payload, ack);
+    }
+  });
+}

@@ -10,7 +10,10 @@ export type TablaId = (typeof TABLA_IDS)[number];
 export type EstufaId = (typeof ESTUFA_IDS)[number];
 export type MesonId = (typeof MESON_IDS)[number];
 
-export type Ingredient = "lechuga" | "tomate";
+export type Ingredient = "lechuga" | "tomate" | "cebolla" | "camaron" | "pescado" | "carne";
+
+/** Ingredientes que se sirven picados directamente, sin pasar por la estufa. */
+const CHOP_ONLY_INGREDIENTS: Ingredient[] = ["lechuga", "cebolla"];
 
 export type BoardItem = { ingredient: Ingredient; chopped: boolean; chopProgress: number } | null;
 
@@ -18,7 +21,13 @@ export type PotContent = { ingredient: Ingredient; progress: number; state: "coc
 
 export type StoveSlot = { potPresent: boolean; content: PotContent };
 
-export type PlateContent = "lechuga" | "salsa";
+export type PlateContent = "lechuga" | "cebolla" | "salsa" | "camaron" | "pescado" | "carne";
+
+/** A qué se convierte un ingrediente cocinado al servirlo en el plato. */
+function cookedContentFor(ingredient: Ingredient): PlateContent {
+  if (ingredient === "tomate") return "salsa";
+  return ingredient as PlateContent;
+}
 
 export type Carrying =
   | null
@@ -31,6 +40,10 @@ export type Carrying =
 export type StationId =
   | "cofreLechuga"
   | "cofreTomate"
+  | "cofreCebolla"
+  | "cofreCamaron"
+  | "cofrePescado"
+  | "cofreCarne"
   | "tabla1"
   | "tabla2"
   | "estufa1"
@@ -42,12 +55,85 @@ export type StationId =
   | "platos"
   | "entrega"
   | "lavaplatos"
+  | "platosSucios"
   | "basura";
 
-export const RECIPE: PlateContent[] = ["lechuga", "salsa"];
+export type Recipe = { id: string; label: string; description: string; contents: PlateContent[] };
+
+export const RECIPES: Recipe[] = [
+  {
+    id: "ensalada-salsa",
+    label: "Ensalada con salsa",
+    description: "Lechuga picada + tomate picado y cocinado, en un plato",
+    contents: ["lechuga", "salsa"],
+  },
+  {
+    id: "ensalada-mixta",
+    label: "Ensalada mixta",
+    description: "Lechuga picada + cebolla picada, en un plato",
+    contents: ["lechuga", "cebolla"],
+  },
+  {
+    id: "salsa-cebolla",
+    label: "Salsa con cebolla",
+    description: "Cebolla picada + tomate picado y cocinado, en un plato",
+    contents: ["cebolla", "salsa"],
+  },
+  {
+    id: "camarones-lechuga",
+    label: "Camarones con lechuga",
+    description: "Camarón picado y cocinado + lechuga picada, en un plato",
+    contents: ["camaron", "lechuga"],
+  },
+  {
+    id: "pescado-cebolla",
+    label: "Pescado con cebolla",
+    description: "Pescado picado y cocinado + cebolla picada, en un plato",
+    contents: ["pescado", "cebolla"],
+  },
+  {
+    id: "hamburguesa-clasica",
+    label: "Hamburguesa clásica",
+    description: "Carne picada y cocinada + lechuga picada, en un plato",
+    contents: ["carne", "lechuga"],
+  },
+];
+
+export const DEFAULT_RECIPE_IDS: string[] = RECIPES.map((r) => r.id);
+
+export function getRecipe(id: string): Recipe {
+  return RECIPES.find((r) => r.id === id) ?? RECIPES[0];
+}
+
+/** Ingredientes que necesitan pasar por la estufa antes de ir al plato (más riesgo de quemarse = más puntos). */
+const COOKED_PLATE_CONTENTS: PlateContent[] = ["salsa", "camaron", "pescado", "carne"];
+
+/**
+ * Puntos que vale un plato con este contenido, de 0 a 100: una base por usar un plato,
+ * más puntos por cada ingrediente y un extra por cada ingrediente que requirió cocción.
+ * Se usa tanto para premiar una entrega correcta como para penalizar una incompleta
+ * (se resta el valor de lo que efectivamente llevaba el plato entregado).
+ */
+export function plateValue(contenido: PlateContent[]): number {
+  const cookedCount = contenido.filter((c) => COOKED_PLATE_CONTENTS.includes(c)).length;
+  return Math.min(100, 30 + contenido.length * 15 + cookedCount * 25);
+}
+
+export const BURN_PENALTY = 20;
+
+/** Elige una receta al azar de un conjunto habilitado (ids), evitando repetir `excludeId` si hay más de una opción. */
+export function pickRecipeFromPool(enabledRecipeIds: string[], excludeId?: string): Recipe {
+  const base = enabledRecipeIds.length > 0 ? enabledRecipeIds : DEFAULT_RECIPE_IDS;
+  const options = excludeId ? base.filter((id) => id !== excludeId) : base;
+  const pool = options.length > 0 ? options : base;
+  const id = pool[Math.floor(Math.random() * pool.length)];
+  return getRecipe(id);
+}
+
 export const ORDER_SECONDS = 60;
+export const MAX_ACTIVE_ORDERS = 3;
 export const CHOP_TARGET = 1.4;
-export const WASH_TARGET = 1.6;
+export const WASH_TARGET = 3;
 export const COOK_DONE_AT = 4;
 export const COOK_BURN_AT = 9;
 
@@ -68,11 +154,13 @@ export const MESON_TABLE_WIDTH = 4.15;
 export const STATIONS: { id: StationId; x: number; z: number; label: string; rotationY?: number }[] = [
   { id: "cofreLechuga", x: -5, z: -4, label: "Cofre de lechuga" },
   { id: "cofreTomate", x: -3.3, z: -4, label: "Cofre de tomate" },
+  { id: "cofreCebolla", x: 4.3, z: -4, label: "Cofre de cebolla" },
   { id: "tabla1", x: -1.5, z: -4, label: "Tabla de picar 1" },
   { id: "tabla2", x: -0.5, z: -4, label: "Tabla de picar 2" },
   { id: "estufa1", x: 1.5, z: -4, label: "Estufa 1" },
   { id: "estufa2", x: 2.5, z: -4, label: "Estufa 2" },
   { id: "platos", x: -5, z: 0, label: "Platos" },
+  { id: "platosSucios", x: -4.16, z: 0, label: "Platos sucios" },
   { id: "lavaplatos", x: -3.3, z: 0, label: "Lavaplatos" },
   { id: "basura", x: -1.6, z: 0, label: "Basura" },
   { id: "meson1", x: 1, z: 0, label: "Mesón" },
@@ -80,6 +168,9 @@ export const STATIONS: { id: StationId; x: number; z: number; label: string; rot
   { id: "meson3", x: 3.2, z: 0, label: "Mesón" },
   { id: "meson4", x: 4.3, z: 0, label: "Mesón" },
   { id: "entrega", x: 7, z: 0, label: "Ventana de entrega", rotationY: -Math.PI / 2 },
+  { id: "cofreCamaron", x: 3, z: 4, label: "Cofre de camarón" },
+  { id: "cofrePescado", x: 4, z: 4, label: "Cofre de pescado" },
+  { id: "cofreCarne", x: 5, z: 4, label: "Cofre de carne" },
 ];
 
 type Obstacle = { x: number; z: number; hw: number; hd: number };
@@ -94,13 +185,18 @@ for (let z = -HALF_D + 1; z <= HALF_D - 1; z += 1) {
 }
 OBSTACLES.push({ x: -5, z: -4, hw: 0.44, hd: 0.44 });
 OBSTACLES.push({ x: -3.3, z: -4, hw: 0.44, hd: 0.44 });
+OBSTACLES.push({ x: 4.3, z: -4, hw: 0.44, hd: 0.44 });
 OBSTACLES.push({ x: TABLA_PAIR_X, z: -4, hw: TABLA_PAIR_WIDTH / 2, hd: 0.44 });
 OBSTACLES.push({ x: ESTUFA_PAIR_X, z: -4, hw: ESTUFA_PAIR_WIDTH / 2, hd: 0.44 });
 OBSTACLES.push({ x: -5, z: 0, hw: 0.44, hd: 0.44 });
+OBSTACLES.push({ x: -4.16, z: 0, hw: 0.35, hd: 0.28 });
 OBSTACLES.push({ x: -3.3, z: 0, hw: 0.44, hd: 0.44 });
 OBSTACLES.push({ x: -1.6, z: 0, hw: 0.44, hd: 0.44 });
 OBSTACLES.push({ x: MESON_TABLE_CENTER_X, z: 0, hw: MESON_TABLE_WIDTH / 2, hd: 0.44 });
 OBSTACLES.push({ x: 7, z: 0, hw: 0.46, hd: 0.46 });
+OBSTACLES.push({ x: 3, z: 4, hw: 0.44, hd: 0.44 });
+OBSTACLES.push({ x: 4, z: 4, hw: 0.44, hd: 0.44 });
+OBSTACLES.push({ x: 5, z: 4, hw: 0.44, hd: 0.44 });
 
 export function collides(x: number, z: number) {
   for (const o of OBSTACLES) {
@@ -130,9 +226,9 @@ export function getTargetStation(pos: [number, number, number], facing: number) 
   return closest;
 }
 
-export function plateMatchesRecipe(contenido: PlateContent[]) {
-  if (contenido.length !== RECIPE.length) return false;
-  return RECIPE.every((item) => contenido.includes(item));
+export function plateMatchesContents(contenido: PlateContent[], recipeContents: PlateContent[]) {
+  if (contenido.length !== recipeContents.length) return false;
+  return recipeContents.every((item) => contenido.includes(item));
 }
 
 export type KitchenPlayer = {
@@ -144,6 +240,8 @@ export type KitchenPlayer = {
   messageUntil: number;
 };
 
+export type ActiveOrder = { id: string; recipeId: string; secondsLeft: number };
+
 export type KitchenState = {
   players: Record<string, KitchenPlayer>;
   boards: Record<TablaId, BoardItem>;
@@ -151,14 +249,29 @@ export type KitchenState = {
   mesonSlots: Record<MesonId, Carrying>;
   cleanPlates: number;
   dirtyPlates: number;
+  washQueue: number;
   washProgress: number;
   score: number;
-  orderSecondsLeft: number;
+  enabledRecipeIds: string[];
+  orders: ActiveOrder[];
 };
 
 export type PlayerInput = { dx: number; dz: number; spaceHeld: boolean; interact: boolean };
 
-export function createKitchenState(): KitchenState {
+let orderCounter = 0;
+function generateOrderId(): string {
+  orderCounter += 1;
+  return `order-${Date.now().toString(36)}-${orderCounter}`;
+}
+
+function freshOrder(enabledRecipeIds: string[], excludeId?: string): ActiveOrder {
+  return { id: generateOrderId(), recipeId: pickRecipeFromPool(enabledRecipeIds, excludeId).id, secondsLeft: ORDER_SECONDS };
+}
+
+export function createKitchenState(enabledRecipeIds: string[] = DEFAULT_RECIPE_IDS): KitchenState {
+  const pool = enabledRecipeIds.length > 0 ? enabledRecipeIds : DEFAULT_RECIPE_IDS;
+  const orders: ActiveOrder[] = [];
+  for (let i = 0; i < MAX_ACTIVE_ORDERS; i++) orders.push(freshOrder(pool));
   return {
     players: {},
     boards: { tabla1: null, tabla2: null },
@@ -169,9 +282,11 @@ export function createKitchenState(): KitchenState {
     mesonSlots: { meson1: null, meson2: null, meson3: null, meson4: null },
     cleanPlates: 3,
     dirtyPlates: 0,
+    washQueue: 0,
     washProgress: 0,
     score: 0,
-    orderSecondsLeft: ORDER_SECONDS,
+    enabledRecipeIds: pool,
+    orders,
   };
 }
 
@@ -198,19 +313,30 @@ function showMessage(state: KitchenState, playerId: string, text: string, now: n
   player.messageUntil = now + 1600;
 }
 
+function ingredientToCrate(stationId: StationId): Ingredient | null {
+  if (stationId === "cofreLechuga") return "lechuga";
+  if (stationId === "cofreTomate") return "tomate";
+  if (stationId === "cofreCebolla") return "cebolla";
+  if (stationId === "cofreCamaron") return "camaron";
+  if (stationId === "cofrePescado") return "pescado";
+  if (stationId === "cofreCarne") return "carne";
+  return null;
+}
+
 function handleTabla(state: KitchenState, playerId: string, id: TablaId, now: number) {
   const player = state.players[playerId];
   const board = state.boards[id];
   if (board && board.chopped) {
+    const asPlateContent = CHOP_ONLY_INGREDIENTS.includes(board.ingredient) ? (board.ingredient as PlateContent) : null;
     if (player.carrying === null) {
       player.carrying = { kind: "ingrediente", ingrediente: board.ingredient, chopped: true };
       state.boards[id] = null;
     } else if (
       player.carrying.kind === "plato" &&
-      board.ingredient === "lechuga" &&
-      !player.carrying.contenido.includes("lechuga")
+      asPlateContent &&
+      !player.carrying.contenido.includes(asPlateContent)
     ) {
-      player.carrying.contenido.push("lechuga");
+      player.carrying.contenido.push(asPlateContent);
       state.boards[id] = null;
     } else {
       showMessage(state, playerId, "Tienes las manos ocupadas.", now);
@@ -226,8 +352,12 @@ function handleEstufa(state: KitchenState, playerId: string, id: EstufaId, now: 
   const slot = state.stoves[id];
   if (slot.potPresent) {
     if (slot.content === null) {
-      if (player.carrying?.kind === "ingrediente" && player.carrying.ingrediente === "tomate" && player.carrying.chopped) {
-        slot.content = { ingredient: "tomate", progress: 0, state: "cocinando" };
+      if (
+        player.carrying?.kind === "ingrediente" &&
+        player.carrying.chopped &&
+        !CHOP_ONLY_INGREDIENTS.includes(player.carrying.ingrediente)
+      ) {
+        slot.content = { ingredient: player.carrying.ingrediente, progress: 0, state: "cocinando" };
         player.carrying = null;
       } else if (player.carrying === null) {
         player.carrying = { kind: "olla", content: null };
@@ -266,25 +396,32 @@ function handleMeson(state: KitchenState, playerId: string, id: MesonId, now: nu
     state.mesonSlots[id] = null;
     return;
   }
+  if (player.carrying.kind === "olla" && player.carrying.content?.state === "listo" && slot.kind === "plato") {
+    const content = cookedContentFor(player.carrying.content.ingredient);
+    if (!slot.contenido.includes(content)) {
+      slot.contenido.push(content);
+      player.carrying = { kind: "olla", content: null };
+      return;
+    }
+  }
   if (
-    player.carrying.kind === "olla" &&
-    player.carrying.content?.state === "listo" &&
+    player.carrying.kind === "ingrediente" &&
+    player.carrying.chopped &&
+    CHOP_ONLY_INGREDIENTS.includes(player.carrying.ingrediente) &&
     slot.kind === "plato" &&
-    !slot.contenido.includes("salsa")
+    !slot.contenido.includes(player.carrying.ingrediente as PlateContent)
   ) {
-    slot.contenido.push("salsa");
-    player.carrying = { kind: "olla", content: null };
+    slot.contenido.push(player.carrying.ingrediente as PlateContent);
+    player.carrying = null;
     return;
   }
   if (
     player.carrying.kind === "ingrediente" &&
-    player.carrying.ingrediente === "lechuga" &&
     player.carrying.chopped &&
-    slot.kind === "plato" &&
-    !slot.contenido.includes("lechuga")
+    !CHOP_ONLY_INGREDIENTS.includes(player.carrying.ingrediente) &&
+    slot.kind === "plato"
   ) {
-    slot.contenido.push("lechuga");
-    player.carrying = null;
+    showMessage(state, playerId, "Ese ingrediente necesita cocinarse primero.", now);
     return;
   }
   showMessage(state, playerId, "Tienes las manos ocupadas.", now);
@@ -293,13 +430,10 @@ function handleMeson(state: KitchenState, playerId: string, id: MesonId, now: nu
 function handleInteract(state: KitchenState, playerId: string, stationId: StationId, now: number) {
   const player = state.players[playerId];
 
-  if (stationId === "cofreLechuga" || stationId === "cofreTomate") {
+  const crateIngredient = ingredientToCrate(stationId);
+  if (crateIngredient) {
     if (player.carrying === null) {
-      player.carrying = {
-        kind: "ingrediente",
-        ingrediente: stationId === "cofreLechuga" ? "lechuga" : "tomate",
-        chopped: false,
-      };
+      player.carrying = { kind: "ingrediente", ingrediente: crateIngredient, chopped: false };
     }
     return;
   }
@@ -331,15 +465,39 @@ function handleInteract(state: KitchenState, playerId: string, stationId: Statio
 
   if (stationId === "entrega") {
     if (player.carrying?.kind === "plato") {
-      if (plateMatchesRecipe(player.carrying.contenido)) {
-        state.score += 100;
-        state.dirtyPlates += 1;
-        player.carrying = null;
-        state.orderSecondsLeft = ORDER_SECONDS;
-        showMessage(state, playerId, "¡Entregado! +100", now);
+      const carried = player.carrying;
+      const orderIndex = state.orders.findIndex((o) => plateMatchesContents(carried.contenido, getRecipe(o.recipeId).contents));
+      state.dirtyPlates += 1;
+      player.carrying = null;
+      if (orderIndex !== -1) {
+        const served = state.orders[orderIndex];
+        const points = plateValue(getRecipe(served.recipeId).contents);
+        state.score += points;
+        state.orders[orderIndex] = freshOrder(state.enabledRecipeIds, served.recipeId);
+        showMessage(state, playerId, `¡Entregado! +${points}`, now);
       } else {
-        showMessage(state, playerId, "Ese plato no es lo que piden.", now);
+        const penalty = plateValue(carried.contenido);
+        state.score = Math.max(0, state.score - penalty);
+        showMessage(state, playerId, `Plato incompleto: -${penalty}`, now);
       }
+    }
+    return;
+  }
+
+  if (stationId === "platosSucios") {
+    if (player.carrying === null && state.dirtyPlates > 0) {
+      player.carrying = { kind: "platoSucio" };
+      state.dirtyPlates -= 1;
+    } else if (player.carrying === null) {
+      showMessage(state, playerId, "No hay platos sucios aquí.", now);
+    }
+    return;
+  }
+
+  if (stationId === "lavaplatos") {
+    if (player.carrying?.kind === "platoSucio") {
+      state.washQueue += 1;
+      player.carrying = null;
     }
     return;
   }
@@ -405,10 +563,10 @@ export function tickKitchen(state: KitchenState, inputs: Record<string, PlayerIn
     const target = getTargetStation(player.position, player.facing);
     return target?.id === "lavaplatos";
   });
-  if (anyoneWashing && state.dirtyPlates > 0) {
+  if (anyoneWashing && state.washQueue > 0) {
     state.washProgress += dt;
     if (state.washProgress >= WASH_TARGET) {
-      state.dirtyPlates -= 1;
+      state.washQueue -= 1;
       state.cleanPlates += 1;
       state.washProgress = 0;
     }
@@ -422,14 +580,17 @@ export function tickKitchen(state: KitchenState, inputs: Record<string, PlayerIn
       slot.content.progress += dt;
       if (slot.content.progress >= COOK_BURN_AT) {
         slot.content.state = "quemado";
+        state.score = Math.max(0, state.score - BURN_PENALTY);
       } else if (slot.content.progress >= COOK_DONE_AT) {
         slot.content.state = "listo";
       }
     }
   }
 
-  state.orderSecondsLeft -= dt;
-  if (state.orderSecondsLeft <= 0) {
-    state.orderSecondsLeft = ORDER_SECONDS;
+  for (const order of state.orders) order.secondsLeft -= dt;
+  const expiredIndex = state.orders.findIndex((o) => o.secondsLeft <= 0);
+  if (expiredIndex !== -1) {
+    const expired = state.orders[expiredIndex];
+    state.orders[expiredIndex] = freshOrder(state.enabledRecipeIds, expired.recipeId);
   }
 }

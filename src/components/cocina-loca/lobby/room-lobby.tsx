@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { Check, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +16,7 @@ import {
   type RoomConfig,
   type TeamId,
 } from "@/lib/cocina-events";
+import { RECIPES } from "@/lib/kitchen-sim";
 
 export function RoomLobby({
   code,
@@ -22,8 +25,8 @@ export function RoomLobby({
   myUserId,
   isHost,
   onSetConfig,
+  onSetRecipes,
   onSetTeam,
-  onSetColor,
   onStart,
   onLeave,
 }: {
@@ -33,22 +36,53 @@ export function RoomLobby({
   myUserId: string;
   isHost: boolean;
   onSetConfig: (numTeams: number, teamSize: number) => void;
+  onSetRecipes: (recipeIds: string[]) => void;
   onSetTeam: (team: TeamId) => void;
-  onSetColor: (colorId: string) => void;
   onStart: () => void;
   onLeave: () => void;
 }) {
   const me = players.find((p) => p.userId === myUserId);
   const teams = teamIdsFor(config.numTeams);
-  const takenColorsInMyTeam = new Set(
-    players.filter((p) => p.userId !== myUserId && p.team === me?.team).map((p) => p.colorId),
-  );
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  async function handleCopyInviteLink() {
+    const link = `${window.location.origin}/didacticas/cocina-loca/room/${code}`;
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      window.prompt("Copia el enlace de invitación:", link);
+      return;
+    }
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2000);
+  }
+
+  function handleToggleRecipe(recipeId: string) {
+    const isSelected = config.enabledRecipeIds.includes(recipeId);
+    if (isSelected && config.enabledRecipeIds.length <= 1) return;
+    const next = isSelected
+      ? config.enabledRecipeIds.filter((id) => id !== recipeId)
+      : [...config.enabledRecipeIds, recipeId];
+    onSetRecipes(next);
+  }
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-6 rounded-2xl bg-white/10 p-6 text-white backdrop-blur-sm">
-      <div className="text-center">
-        <p className="text-sm text-white/70">Código de la sala</p>
-        <p className="font-mono text-4xl font-bold tracking-[0.3em]">{code}</p>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div>
+          <p className="text-sm text-white/70">Código de la sala</p>
+          <p className="font-mono text-4xl font-bold tracking-[0.3em]">{code}</p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleCopyInviteLink}
+          className="gap-1.5 border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+        >
+          {linkCopied ? <Check className="size-4" /> : <Link2 className="size-4" />}
+          {linkCopied ? "¡Enlace copiado!" : "Copiar enlace de invitación"}
+        </Button>
       </div>
 
       {isHost && (
@@ -84,6 +118,31 @@ export function RoomLobby({
               </select>
             </label>
           </div>
+          <div className="flex flex-col gap-1.5 pt-1">
+            <p className="text-sm">Recetas incluidas en la partida</p>
+            <div className="grid grid-cols-2 gap-1.5">
+              {RECIPES.map((recipe) => {
+                const checked = config.enabledRecipeIds.includes(recipe.id);
+                return (
+                  <label
+                    key={recipe.id}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-2 rounded-md border border-white/20 bg-white/10 px-2 py-1.5 text-sm",
+                      checked && "border-white/60 bg-white/20",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleRecipe(recipe.id)}
+                      className="size-4 accent-violet-600"
+                    />
+                    {recipe.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
 
@@ -106,31 +165,6 @@ export function RoomLobby({
               >
                 {teamLabel(team)} ({count}/{config.teamSize})
               </Button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-white/80">Elige tu color</p>
-        <div className="grid grid-cols-4 gap-2">
-          {PLAYER_COLORS.map((color) => {
-            const taken = takenColorsInMyTeam.has(color.id);
-            const selected = me?.colorId === color.id;
-            return (
-              <button
-                key={color.id}
-                type="button"
-                disabled={taken}
-                onClick={() => onSetColor(color.id)}
-                title={color.label}
-                className={cn(
-                  "flex size-10 items-center justify-center rounded-full border-2 transition-transform",
-                  selected ? "scale-110 border-white" : "border-transparent",
-                  taken && !selected && "cursor-not-allowed opacity-30",
-                )}
-                style={{ backgroundColor: color.hex }}
-              />
             );
           })}
         </div>

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChefHat } from "lucide-react";
 import { getCocinaSocketToken } from "@/server/actions/cocina";
-import { getCocinaSocket } from "@/lib/cocina-socket-client";
+import { emitWithTimeout, getCocinaSocket } from "@/lib/cocina-socket-client";
 import { Button } from "@/components/ui/button";
 
 export function CreateRoomButton() {
@@ -15,18 +15,20 @@ export function CreateRoomButton() {
   function handleClick() {
     setError(null);
     startTransition(async () => {
-      const token = await getCocinaSocketToken();
-      const socket = getCocinaSocket(token);
+      try {
+        const token = await getCocinaSocketToken();
+        const socket = getCocinaSocket(token);
 
-      const res = await new Promise<{ code: string } | { error: string }>((resolve) => {
-        socket.emit("room:create", resolve);
-      });
+        const res = await emitWithTimeout<{ code: string } | { error: string }>(socket, "room:create");
 
-      if ("error" in res) {
-        setError(res.error);
-        return;
+        if ("error" in res) {
+          setError(res.error);
+          return;
+        }
+        router.push(`/didacticas/cocina-loca/room/${res.code}?host=1`);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "No se pudo crear la sala.");
       }
-      router.push(`/didacticas/cocina-loca/room/${res.code}?host=1`);
     });
   }
 
