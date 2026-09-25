@@ -195,8 +195,18 @@ function getTargetStation(pos: [number, number, number], facing: number) {
   return closest;
 }
 
-export function KitchenScene() {
+export function KitchenScene({
+  color = "#ef4444",
+  onDeliver,
+}: {
+  color?: string;
+  onDeliver?: (points: number) => void;
+}) {
   const gameRef = useRef<GameState>(initialGameState());
+  const onDeliverRef = useRef(onDeliver);
+  useEffect(() => {
+    onDeliverRef.current = onDeliver;
+  }, [onDeliver]);
   const positionRef = useRef<[number, number, number]>([0, 0, 3.5]);
   const facingRef = useRef(0);
   const [snapshot, setSnapshot] = useState<RenderSnapshot>({
@@ -396,6 +406,7 @@ export function KitchenScene() {
             g.carrying = null;
             g.orderSecondsLeft = ORDER_SECONDS;
             showMessage("¡Entregado! +100");
+            onDeliverRef.current?.(100);
           } else {
             showMessage("Ese plato no es lo que piden.");
           }
@@ -565,7 +576,7 @@ export function KitchenScene() {
           <TrashBin position={[-1.6, 0]} />
           <AssemblyTable position={[MESON_TABLE_CENTER_X, 0]} width={MESON_TABLE_WIDTH} slots={mesonSlotsForTable} />
           <DeliveryWindow position={[7, 0]} rotationY={-Math.PI / 2} />
-          <ChefCharacter color="#ef4444" position={snapshot.position} facing={snapshot.facing} />
+          <ChefCharacter color={color} position={snapshot.position} facing={snapshot.facing} />
           <CarriedItem carrying={snapshot.carrying} position={snapshot.position} facing={snapshot.facing} />
         </group>
       </Canvas>

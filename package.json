@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "db:seed": "tsx prisma/seed.ts",
-    "trivia-server": "tsx server/trivia-server.ts"
+    "trivia-server": "tsx server/trivia-server.ts",
+    "cocina-server": "tsx server/cocina-server.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

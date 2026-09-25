@@ -43,6 +43,8 @@ nano .env
 - `ALLOWED_EMAIL_DOMAIN`: dominio corporativo permitido
 - `TRIVIA_SOCKET_PORT`: `4001`
 - `NEXT_PUBLIC_SOCKET_URL`: la URL pública del sitio (ej. `https://teambuilding.milio.com.co`), ya que nginx enruta `/socket.io` al mismo origen. **Se hornea en el build** — si cambia, hay que correr `pnpm build` de nuevo.
+- `COCINA_SOCKET_PORT`: `4002`
+- `NEXT_PUBLIC_COCINA_SOCKET_URL`: igual que `NEXT_PUBLIC_SOCKET_URL` pero para Cocina Loca (nginx enruta `/cocina-socket.io` al mismo origen). También se hornea en el build.
 
 ## 4. Instalar, migrar, construir
 
@@ -52,7 +54,7 @@ pnpm dlx prisma migrate deploy
 pnpm build
 ```
 
-## 5. Levantar los dos procesos con PM2
+## 5. Levantar los procesos con PM2
 
 ```bash
 pm2 start ecosystem.config.js
@@ -80,7 +82,7 @@ Certbot reescribe el bloque de nginx para redirigir a HTTPS y renueva automátic
 
 ## 8. Firewall
 
-Solo 80 y 443 deben estar expuestos públicamente. 3000 y 4001 quedan internos (nginx habla con ellos por `127.0.0.1`).
+Solo 80 y 443 deben estar expuestos públicamente. 3000, 4001 y 4002 quedan internos (nginx habla con ellos por `127.0.0.1`).
 
 ```bash
 sudo ufw allow OpenSSH
@@ -90,6 +92,7 @@ sudo ufw enable
 
 ## Verificación
 
-- `pm2 status` — ambos procesos `online`.
+- `pm2 status` — los tres procesos `online`.
 - `curl -I https://teambuilding.milio.com.co` — 200/307.
 - Crear una sala de Trivias y unirse desde otro dispositivo para confirmar que el WebSocket funciona a través de nginx.
+- Crear una sala de Cocina Loca y unirse desde otro dispositivo para confirmar lo mismo en `/cocina-socket.io`.

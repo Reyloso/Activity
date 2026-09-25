@@ -14,5 +14,12 @@ module.exports = {
       args: "exec tsx server/trivia-server.ts",
       env: { NODE_ENV: "production" },
     },
+    {
+      name: "activity-cocina-socket",
+      cwd: __dirname,
+      script: "pnpm",
+      args: "exec tsx server/cocina-server.ts",
+      env: { NODE_ENV: "production" },
+    },
   ],
 };
