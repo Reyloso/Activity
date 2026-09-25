@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PartyPopper } from "lucide-react";
+import { ChefHat, PartyPopper } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getVisibleGames } from "@/server/queries/games";
 import { GameCard } from "@/components/games/game-card";
@@ -24,6 +24,17 @@ export default async function DidacticasPage() {
             <CardHeader>
               <CardTitle className="text-lg">Trivias</CardTitle>
               <CardDescription>Crea tu propia trivia y juégala en vivo con tu equipo, estilo Kahoot.</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+        <Link href="/didacticas/cocina-loca">
+          <Card className="h-full transition-shadow hover:shadow-md">
+            <div className="flex h-28 items-center justify-center rounded-t-xl bg-gradient-to-br from-orange-500 via-amber-500 to-red-500">
+              <ChefHat className="size-10 text-white/90" />
+            </div>
+            <CardHeader>
+              <CardTitle className="text-lg">Cocina Loca</CardTitle>
+              <CardDescription>Juego de cocina competitivo por equipos, en construcción.</CardDescription>
             </CardHeader>
           </Card>
         </Link>
