@@ -19,15 +19,6 @@ export function ItemMesh({ item }: { item: Carrying }) {
     );
   }
 
-  if (item.kind === "salsa") {
-    return (
-      <mesh castShadow>
-        <sphereGeometry args={[0.14, 12, 12]} />
-        <meshStandardMaterial color="#ff7043" />
-      </mesh>
-    );
-  }
-
   if (item.kind === "quemado") {
     return (
       <mesh castShadow>
@@ -39,16 +30,50 @@ export function ItemMesh({ item }: { item: Carrying }) {
 
   if (item.kind === "platoSucio") {
     return (
-      <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+      <mesh castShadow>
+        {/* El cilindro ya queda plano (disco horizontal) sin rotación extra. */}
         <cylinderGeometry args={[0.22, 0.22, 0.04, 20]} />
         <meshStandardMaterial color="#8d6e63" />
       </mesh>
     );
   }
 
+  if (item.kind === "olla") {
+    const stateColor =
+      item.content === null
+        ? null
+        : item.content.state === "quemado"
+          ? "#2b2b2b"
+          : item.content.state === "listo"
+            ? "#ff7043"
+            : "#a1887f";
+    return (
+      <group>
+        <mesh castShadow>
+          <cylinderGeometry args={[0.19, 0.17, 0.14, 20]} />
+          <meshStandardMaterial color="#616161" />
+        </mesh>
+        <mesh position={[0.2, 0.03, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.16, 8]} />
+          <meshStandardMaterial color="#424242" />
+        </mesh>
+        <mesh position={[-0.2, 0.03, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.015, 0.015, 0.16, 8]} />
+          <meshStandardMaterial color="#424242" />
+        </mesh>
+        {stateColor && (
+          <mesh position={[0, 0.1, 0]}>
+            <sphereGeometry args={[0.11, 12, 12]} />
+            <meshStandardMaterial color={stateColor} />
+          </mesh>
+        )}
+      </group>
+    );
+  }
+
   return (
     <group>
-      <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+      <mesh castShadow>
         <cylinderGeometry args={[0.22, 0.22, 0.04, 20]} />
         <meshStandardMaterial color="#f5f5f5" />
       </mesh>

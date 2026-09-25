@@ -26,22 +26,24 @@ export type Ingredient = "lechuga" | "tomate";
 
 export type BoardItem = { ingredient: Ingredient; chopped: boolean } | null;
 
-export type StoveItem = { progress: number; state: "cocinando" | "listo" | "quemado" } | null;
+export type PotContent = { ingredient: Ingredient; progress: number; state: "cocinando" | "listo" | "quemado" } | null;
+
+export type StoveSlot = { potPresent: boolean; content: PotContent };
 
 export type PlateContent = "lechuga" | "salsa";
 
 export type Carrying =
   | null
   | { kind: "ingrediente"; ingrediente: Ingredient; chopped: boolean }
-  | { kind: "salsa" }
   | { kind: "quemado" }
+  | { kind: "olla"; content: PotContent }
   | { kind: "plato"; contenido: PlateContent[] }
   | { kind: "platoSucio" };
 
 export type GameState = {
   carrying: Carrying;
   boards: Record<TablaId, BoardItem>;
-  stoves: Record<EstufaId, StoveItem>;
+  stoves: Record<EstufaId, StoveSlot>;
   mesonSlots: Record<MesonId, Carrying>;
   cleanPlates: number;
   dirtyPlates: number;
@@ -63,7 +65,10 @@ export function initialGameState(): GameState {
   return {
     carrying: null,
     boards: { tabla1: null, tabla2: null },
-    stoves: { estufa1: null, estufa2: null },
+    stoves: {
+      estufa1: { potPresent: true, content: null },
+      estufa2: { potPresent: true, content: null },
+    },
     mesonSlots: { meson1: null, meson2: null, meson3: null, meson4: null },
     cleanPlates: 3,
     dirtyPlates: 0,

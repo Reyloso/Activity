@@ -7,8 +7,14 @@ const CARRYING_LABEL: Record<string, (c: Extract<Carrying, object>) => string> =
     const item = c as Extract<Carrying, { kind: "ingrediente" }>;
     return `${item.chopped ? "Picado" : "Crudo"}: ${item.ingrediente}`;
   },
-  salsa: () => "Salsa de tomate",
   quemado: () => "Quemado (bota a la basura)",
+  olla: (c) => {
+    const item = c as Extract<Carrying, { kind: "olla" }>;
+    if (!item.content) return "Olla vacía";
+    if (item.content.state === "cocinando") return `Olla: cocinando ${Math.round(item.content.progress * 100)}%`;
+    if (item.content.state === "quemado") return "Olla: se quemó (bota a la basura)";
+    return "Olla: salsa lista";
+  },
   plato: (c) => {
     const item = c as Extract<Carrying, { kind: "plato" }>;
     return item.contenido.length === 0 ? "Plato vacío" : `Plato: ${item.contenido.join(" + ")}`;

@@ -3,11 +3,29 @@
 import { ItemMesh } from "@/components/cocina-loca/item-mesh";
 import type { Carrying } from "@/components/cocina-loca/game-types";
 
-export function CarriedItem({ carrying, position }: { carrying: Carrying; position: [number, number, number] }) {
+const HAND_HEIGHT = 0.62;
+const HAND_FORWARD_OFFSET = 0.34;
+
+export function CarriedItem({
+  carrying,
+  position,
+  facing,
+}: {
+  carrying: Carrying;
+  position: [number, number, number];
+  facing: number;
+}) {
   if (!carrying) return null;
-  const y = carrying.kind === "plato" || carrying.kind === "platoSucio" ? 1.5 : 1.55;
+  const fx = Math.sin(facing);
+  const fz = Math.cos(facing);
   return (
-    <group position={[position[0], y, position[2]]}>
+    <group
+      position={[
+        position[0] + fx * HAND_FORWARD_OFFSET,
+        HAND_HEIGHT,
+        position[2] + fz * HAND_FORWARD_OFFSET,
+      ]}
+    >
       <ItemMesh item={carrying} />
     </group>
   );

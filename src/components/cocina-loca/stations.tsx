@@ -2,7 +2,7 @@
 
 import { Text } from "@react-three/drei";
 import { ItemMesh } from "@/components/cocina-loca/item-mesh";
-import type { BoardItem, Carrying, StoveItem } from "@/components/cocina-loca/game-types";
+import { COOK_DONE_AT, type BoardItem, type Carrying, type StoveSlot } from "@/components/cocina-loca/game-types";
 
 const INGREDIENT_COLOR: Record<string, string> = {
   lechuga: "#4caf50",
@@ -30,6 +30,15 @@ export function StationBase({
         {label}
       </Text>
     </group>
+  );
+}
+
+export function PairedBase({ x, z, width }: { x: number; z: number; width: number }) {
+  return (
+    <mesh position={[x, 0.35, z]} castShadow receiveShadow>
+      <boxGeometry args={[width, 0.7, 0.85]} />
+      <meshStandardMaterial color="#8a5a3b" />
+    </mesh>
   );
 }
 
@@ -82,15 +91,11 @@ export function ChoppingBoard({
 }) {
   return (
     <group position={[position[0], 0, position[1]]}>
-      <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.85, 0.7, 0.85]} />
-        <meshStandardMaterial color="#8a5a3b" />
-      </mesh>
       <mesh position={[0, 0.71, 0]} receiveShadow>
         <boxGeometry args={[0.6, 0.03, 0.5]} />
         <meshStandardMaterial color="#d7b98a" />
       </mesh>
-      <Text position={[0, 0.75, 0.44]} fontSize={0.14} color="#ffffff" anchorX="center" anchorY="middle">
+      <Text position={[0, 0.75, 0.44]} fontSize={0.13} color="#ffffff" anchorX="center" anchorY="middle">
         {label}
       </Text>
       {item && (
@@ -141,39 +146,35 @@ export function AssemblyTable({
   );
 }
 
-export function Stove({
-  position,
-  label,
-  item,
-}: {
-  position: [number, number];
-  label: string;
-  item: StoveItem;
-}) {
-  const color = item?.state === "quemado" ? "#2b2b2b" : item?.state === "listo" ? "#ff7043" : "#6d4c41";
+export function Stove({ position, label, slot }: { position: [number, number]; label: string; slot: StoveSlot }) {
   return (
     <group position={[position[0], 0, position[1]]}>
-      <mesh position={[0, 0.35, 0]} castShadow receiveShadow>
-        <boxGeometry args={[0.85, 0.7, 0.85]} />
-        <meshStandardMaterial color="#5a5a5a" />
-      </mesh>
-      <mesh position={[0, 0.78, 0]} castShadow>
-        <cylinderGeometry args={[0.28, 0.3, 0.16, 16]} />
+      <mesh position={[0, 0.71, 0]} receiveShadow>
+        <cylinderGeometry args={[0.28, 0.3, 0.04, 16]} />
         <meshStandardMaterial color="#3a3a3a" />
       </mesh>
-      <Text position={[0, 0.75, 0.44]} fontSize={0.14} color="#ffffff" anchorX="center" anchorY="middle">
+      <Text position={[0, 0.75, 0.44]} fontSize={0.13} color="#ffffff" anchorX="center" anchorY="middle">
         {label}
       </Text>
-      {item && (
-        <>
-          <mesh position={[0, 0.9, 0]} castShadow>
-            <sphereGeometry args={[0.17, 12, 12]} />
-            <meshStandardMaterial color={color} />
-          </mesh>
-          <Text position={[0, 1.15, 0]} fontSize={0.13} color={item.state === "quemado" ? "#ff5252" : "#ffd54f"} anchorX="center">
-            {item.state === "cocinando" ? `${Math.round(item.progress * 100)}%` : item.state === "listo" ? "¡Lista!" : "Quemado"}
-          </Text>
-        </>
+      {slot.potPresent && (
+        <group position={[0, 0.8, 0]}>
+          <ItemMesh item={{ kind: "olla", content: slot.content }} />
+        </group>
+      )}
+      {slot.potPresent && slot.content?.state === "cocinando" && (
+        <Text position={[0, 1.1, 0]} fontSize={0.13} color="#ffd54f" anchorX="center">
+          {Math.min(100, Math.round((slot.content.progress / COOK_DONE_AT) * 100))}%
+        </Text>
+      )}
+      {slot.potPresent && slot.content?.state === "listo" && (
+        <Text position={[0, 1.1, 0]} fontSize={0.13} color="#ffd54f" anchorX="center">
+          ¡Lista!
+        </Text>
+      )}
+      {slot.potPresent && slot.content?.state === "quemado" && (
+        <Text position={[0, 1.1, 0]} fontSize={0.13} color="#ff5252" anchorX="center">
+          Quemado
+        </Text>
       )}
     </group>
   );
