@@ -1,13 +1,26 @@
 export type StationId =
   | "cofreLechuga"
   | "cofreTomate"
-  | "tabla"
-  | "estufa"
-  | "meson"
+  | "tabla1"
+  | "tabla2"
+  | "estufa1"
+  | "estufa2"
+  | "meson1"
+  | "meson2"
+  | "meson3"
+  | "meson4"
   | "platos"
   | "entrega"
   | "lavaplatos"
   | "basura";
+
+export const TABLA_IDS = ["tabla1", "tabla2"] as const;
+export const ESTUFA_IDS = ["estufa1", "estufa2"] as const;
+export const MESON_IDS = ["meson1", "meson2", "meson3", "meson4"] as const;
+
+export type TablaId = (typeof TABLA_IDS)[number];
+export type EstufaId = (typeof ESTUFA_IDS)[number];
+export type MesonId = (typeof MESON_IDS)[number];
 
 export type Ingredient = "lechuga" | "tomate";
 
@@ -25,13 +38,11 @@ export type Carrying =
   | { kind: "plato"; contenido: PlateContent[] }
   | { kind: "platoSucio" };
 
-export type MesonSlot = { contenido: PlateContent[] } | null;
-
 export type GameState = {
   carrying: Carrying;
-  board: BoardItem;
-  stove: StoveItem;
-  mesonSlot: MesonSlot;
+  boards: Record<TablaId, BoardItem>;
+  stoves: Record<EstufaId, StoveItem>;
+  mesonSlots: Record<MesonId, Carrying>;
   cleanPlates: number;
   dirtyPlates: number;
   washProgress: number;
@@ -51,9 +62,9 @@ export const COOK_BURN_AT = 9; // segundos hasta que se quema si no se recoge
 export function initialGameState(): GameState {
   return {
     carrying: null,
-    board: null,
-    stove: null,
-    mesonSlot: null,
+    boards: { tabla1: null, tabla2: null },
+    stoves: { estufa1: null, estufa2: null },
+    mesonSlots: { meson1: null, meson2: null, meson3: null, meson4: null },
     cleanPlates: 3,
     dirtyPlates: 0,
     washProgress: 0,

@@ -6,7 +6,7 @@ import { ChefCharacter } from "@/components/cocina-loca/chef-character";
 import { CarriedItem } from "@/components/cocina-loca/carried-item";
 import { KitchenHud } from "@/components/cocina-loca/kitchen-hud";
 import {
-  AssemblyCounter,
+  AssemblyTable,
   ChoppingBoard,
   DeliveryWindow,
   LettuceCrate,
@@ -20,31 +20,20 @@ import {
   CHOP_TARGET,
   COOK_BURN_AT,
   COOK_DONE_AT,
+  ESTUFA_IDS,
+  MESON_IDS,
   ORDER_SECONDS,
+  TABLA_IDS,
   WASH_TARGET,
   initialGameState,
   plateMatchesRecipe,
   type Carrying,
+  type EstufaId,
   type GameState,
+  type MesonId,
   type StationId,
+  type TablaId,
 } from "@/components/cocina-loca/game-types";
-
-type RenderSnapshot = {
-  position: [number, number, number];
-  facing: number;
-  carrying: Carrying;
-  board: GameState["board"];
-  stove: GameState["stove"];
-  mesonSlot: GameState["mesonSlot"];
-  cleanPlates: number;
-  dirtyPlates: number;
-  washProgress: number;
-  chopProgress: number;
-  score: number;
-  orderSecondsLeft: number;
-  message: string | null;
-  targetLabel: string | null;
-};
 
 function FixedOverheadCamera() {
   const { camera } = useThree();
@@ -54,9 +43,27 @@ function FixedOverheadCamera() {
   return null;
 }
 
-const MOVE_SPEED = 3.2; // unidades por segundo
-const HALF_W = 4.5;
-const HALF_D = 3.5;
+type RenderSnapshot = {
+  position: [number, number, number];
+  facing: number;
+  carrying: Carrying;
+  boards: GameState["boards"];
+  stoves: GameState["stoves"];
+  mesonSlots: GameState["mesonSlots"];
+  cleanPlates: number;
+  dirtyPlates: number;
+  washProgress: number;
+  chopProgress: number;
+  chopTargetId: TablaId | null;
+  score: number;
+  orderSecondsLeft: number;
+  message: string | null;
+  targetLabel: string | null;
+};
+
+const MOVE_SPEED = 3.4; // unidades por segundo
+const HALF_W = 7;
+const HALF_D = 5;
 const REACH_DIST = 0.95;
 const REACH_RADIUS = 0.62;
 
@@ -71,16 +78,24 @@ const KEY_TO_DIR: Record<string, [number, number]> = {
   d: [1, 0],
 };
 
-const STATIONS: { id: StationId; x: number; z: number; label: string }[] = [
-  { id: "cofreLechuga", x: -4, z: -1.8, label: "Cofre de lechuga" },
-  { id: "cofreTomate", x: -3, z: -1.8, label: "Cofre de tomate" },
-  { id: "tabla", x: -2, z: -1.8, label: "Tabla de picar" },
-  { id: "meson", x: -1, z: -1.8, label: "Mesón" },
-  { id: "estufa", x: 0, z: -1.8, label: "Estufa" },
-  { id: "platos", x: 1, z: -1.8, label: "Platos" },
-  { id: "entrega", x: 2, z: -1.8, label: "Ventana de entrega" },
-  { id: "lavaplatos", x: 3, z: -1.8, label: "Lavaplatos" },
-  { id: "basura", x: 4, z: -1.8, label: "Basura" },
+const MESON_TABLE_CENTER_X = 3.65;
+const MESON_TABLE_WIDTH = 4.15;
+
+const STATIONS: { id: StationId; x: number; z: number; label: string; rotationY?: number }[] = [
+  { id: "cofreLechuga", x: -5, z: -4, label: "Cofre de lechuga" },
+  { id: "cofreTomate", x: -3, z: -4, label: "Cofre de tomate" },
+  { id: "tabla1", x: -1, z: -4, label: "Tabla de picar 1" },
+  { id: "tabla2", x: 1, z: -4, label: "Tabla de picar 2" },
+  { id: "estufa1", x: 3, z: -4, label: "Estufa 1" },
+  { id: "estufa2", x: 5, z: -4, label: "Estufa 2" },
+  { id: "platos", x: -5, z: 0, label: "Platos" },
+  { id: "lavaplatos", x: -3, z: 0, label: "Lavaplatos" },
+  { id: "basura", x: -1, z: 0, label: "Basura" },
+  { id: "meson1", x: 2, z: 0, label: "Mesón" },
+  { id: "meson2", x: 3.1, z: 0, label: "Mesón" },
+  { id: "meson3", x: 4.2, z: 0, label: "Mesón" },
+  { id: "meson4", x: 5.3, z: 0, label: "Mesón" },
+  { id: "entrega", x: 7, z: 0, label: "Ventana de entrega", rotationY: -Math.PI / 2 },
 ];
 
 function KitchenFloor() {
@@ -103,12 +118,12 @@ function BorderCounter({ position }: { position: [number, number, number] }) {
 
 function KitchenBorder() {
   const counters: [number, number, number][] = [];
-  for (let x = -HALF_W + 0.5; x <= HALF_W - 0.5; x += 1) {
+  for (let x = -HALF_W + 1; x <= HALF_W - 1; x += 1) {
     counters.push([x, 0, HALF_D]);
   }
   for (let z = -HALF_D + 1; z <= HALF_D - 1; z += 1) {
     counters.push([-HALF_W, 0, z]);
-    counters.push([HALF_W, 0, z]);
+    if (z !== 0) counters.push([HALF_W, 0, z]); // hueco en el muro este para la ventana de entrega
   }
   return (
     <>
@@ -138,19 +153,20 @@ function getTargetStation(pos: [number, number, number], facing: number) {
 
 export function KitchenScene() {
   const gameRef = useRef<GameState>(initialGameState());
-  const positionRef = useRef<[number, number, number]>([0, 0, 1.5]);
+  const positionRef = useRef<[number, number, number]>([0, 0, 3]);
   const facingRef = useRef(0);
   const [snapshot, setSnapshot] = useState<RenderSnapshot>({
-    position: [0, 0, 1.5],
+    position: [0, 0, 3],
     facing: 0,
     carrying: null,
-    board: null,
-    stove: null,
-    mesonSlot: null,
+    boards: { tabla1: null, tabla2: null },
+    stoves: { estufa1: null, estufa2: null },
+    mesonSlots: { meson1: null, meson2: null, meson3: null, meson4: null },
     cleanPlates: 3,
     dirtyPlates: 0,
     washProgress: 0,
     chopProgress: 0,
+    chopTargetId: null,
     score: 0,
     orderSecondsLeft: ORDER_SECONDS,
     message: null,
@@ -198,6 +214,65 @@ export function KitchenScene() {
   useEffect(() => {
     let raf: number;
 
+    function handleTabla(id: TablaId) {
+      const g = gameRef.current;
+      const board = g.boards[id];
+      if (board && board.chopped) {
+        if (g.carrying === null) {
+          g.carrying = { kind: "ingrediente", ingrediente: board.ingredient, chopped: true };
+          g.boards[id] = null;
+        } else if (g.carrying.kind === "plato" && board.ingredient === "lechuga" && !g.carrying.contenido.includes("lechuga")) {
+          g.carrying.contenido.push("lechuga");
+          g.boards[id] = null;
+        } else {
+          showMessage("Tienes las manos ocupadas.");
+        }
+      } else if (board === null && g.carrying?.kind === "ingrediente") {
+        g.boards[id] = { ingredient: g.carrying.ingrediente, chopped: g.carrying.chopped };
+        g.carrying = null;
+      }
+    }
+
+    function handleEstufa(id: EstufaId) {
+      const g = gameRef.current;
+      const stove = g.stoves[id];
+      if (stove === null) {
+        if (g.carrying?.kind === "ingrediente" && g.carrying.ingrediente === "tomate" && g.carrying.chopped) {
+          g.stoves[id] = { progress: 0, state: "cocinando" };
+          g.carrying = null;
+        }
+      } else if (stove.state === "listo") {
+        if (g.carrying === null) {
+          g.carrying = { kind: "salsa" };
+          g.stoves[id] = null;
+        } else if (g.carrying.kind === "plato" && !g.carrying.contenido.includes("salsa")) {
+          g.carrying.contenido.push("salsa");
+          g.stoves[id] = null;
+        } else {
+          showMessage("Tienes las manos ocupadas.");
+        }
+      } else if (stove.state === "quemado" && g.carrying === null) {
+        g.carrying = { kind: "quemado" };
+        g.stoves[id] = null;
+      }
+    }
+
+    function handleMeson(id: MesonId) {
+      const g = gameRef.current;
+      const slot = g.mesonSlots[id];
+      if (slot === null) {
+        if (g.carrying !== null) {
+          g.mesonSlots[id] = g.carrying;
+          g.carrying = null;
+        }
+      } else if (g.carrying === null) {
+        g.carrying = slot;
+        g.mesonSlots[id] = null;
+      } else {
+        showMessage("Tienes las manos ocupadas.");
+      }
+    }
+
     function handleInteract(stationId: StationId) {
       const g = gameRef.current;
 
@@ -212,61 +287,18 @@ export function KitchenScene() {
         return;
       }
 
-      if (stationId === "tabla") {
-        if (g.board && g.board.chopped) {
-          if (g.carrying === null) {
-            g.carrying = { kind: "ingrediente", ingrediente: g.board.ingredient, chopped: true };
-            g.board = null;
-          } else if (g.carrying.kind === "plato" && g.board.ingredient === "lechuga" && !g.carrying.contenido.includes("lechuga")) {
-            g.carrying.contenido.push("lechuga");
-            g.board = null;
-          } else {
-            showMessage("Tienes las manos ocupadas.");
-          }
-        } else if (g.board === null && g.carrying?.kind === "ingrediente") {
-          g.board = { ingredient: g.carrying.ingrediente, chopped: g.carrying.chopped };
-          g.carrying = null;
-        }
+      if ((TABLA_IDS as readonly string[]).includes(stationId)) {
+        handleTabla(stationId as TablaId);
         return;
       }
 
-      if (stationId === "meson") {
-        if (g.mesonSlot === null) {
-          if (g.carrying?.kind === "plato") {
-            g.mesonSlot = { contenido: g.carrying.contenido };
-            g.carrying = null;
-          } else if (g.carrying !== null) {
-            showMessage("El mesón solo guarda platos.");
-          }
-        } else if (g.carrying === null) {
-          g.carrying = { kind: "plato", contenido: g.mesonSlot.contenido };
-          g.mesonSlot = null;
-        } else {
-          showMessage("Tienes las manos ocupadas.");
-        }
+      if ((ESTUFA_IDS as readonly string[]).includes(stationId)) {
+        handleEstufa(stationId as EstufaId);
         return;
       }
 
-      if (stationId === "estufa") {
-        if (g.stove === null) {
-          if (g.carrying?.kind === "ingrediente" && g.carrying.ingrediente === "tomate" && g.carrying.chopped) {
-            g.stove = { progress: 0, state: "cocinando" };
-            g.carrying = null;
-          }
-        } else if (g.stove.state === "listo") {
-          if (g.carrying === null) {
-            g.carrying = { kind: "salsa" };
-            g.stove = null;
-          } else if (g.carrying.kind === "plato" && !g.carrying.contenido.includes("salsa")) {
-            g.carrying.contenido.push("salsa");
-            g.stove = null;
-          } else {
-            showMessage("Tienes las manos ocupadas.");
-          }
-        } else if (g.stove.state === "quemado" && g.carrying === null) {
-          g.carrying = { kind: "quemado" };
-          g.stove = null;
-        }
+      if ((MESON_IDS as readonly string[]).includes(stationId)) {
+        handleMeson(stationId as MesonId);
         return;
       }
 
@@ -338,11 +370,13 @@ export function KitchenScene() {
         if (target) handleInteract(target.id);
       }
 
-      // Picar (mantener espacio sobre la tabla con ingrediente crudo)
-      if (spaceHeldRef.current && target?.id === "tabla" && g.board && !g.board.chopped && g.carrying === null) {
+      // Picar (mantener espacio sobre una tabla con ingrediente crudo)
+      const targetBoard =
+        target && (TABLA_IDS as readonly string[]).includes(target.id) ? g.boards[target.id as TablaId] : null;
+      if (spaceHeldRef.current && targetBoard && !targetBoard.chopped && g.carrying === null) {
         g.chopProgress += dt;
         if (g.chopProgress >= CHOP_TARGET) {
-          g.board.chopped = true;
+          targetBoard.chopped = true;
           g.chopProgress = 0;
         }
       } else {
@@ -361,13 +395,16 @@ export function KitchenScene() {
         g.washProgress = 0;
       }
 
-      // Cocción automática de la estufa
-      if (g.stove && g.stove.state === "cocinando") {
-        g.stove.progress += dt;
-        if (g.stove.progress >= COOK_BURN_AT) {
-          g.stove.state = "quemado";
-        } else if (g.stove.progress >= COOK_DONE_AT) {
-          g.stove.state = "listo";
+      // Cocción automática de las estufas
+      for (const id of ESTUFA_IDS) {
+        const stove = g.stoves[id];
+        if (stove && stove.state === "cocinando") {
+          stove.progress += dt;
+          if (stove.progress >= COOK_BURN_AT) {
+            stove.state = "quemado";
+          } else if (stove.progress >= COOK_DONE_AT) {
+            stove.state = "listo";
+          }
         }
       }
 
@@ -382,13 +419,14 @@ export function KitchenScene() {
         position: positionRef.current,
         facing: facingRef.current,
         carrying: g.carrying,
-        board: g.board,
-        stove: g.stove,
-        mesonSlot: g.mesonSlot,
+        boards: { ...g.boards },
+        stoves: { ...g.stoves },
+        mesonSlots: { ...g.mesonSlots },
         cleanPlates: g.cleanPlates,
         dirtyPlates: g.dirtyPlates,
         washProgress: g.washProgress,
         chopProgress: g.chopProgress,
+        chopTargetId: g.chopProgress > 0 && target && (TABLA_IDS as readonly string[]).includes(target.id) ? (target.id as TablaId) : null,
         score: g.score,
         orderSecondsLeft: g.orderSecondsLeft,
         message: g.message,
@@ -401,27 +439,44 @@ export function KitchenScene() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const cameraPosition = useMemo<[number, number, number]>(() => [0, 7.5, 7], []);
+  const cameraPosition = useMemo<[number, number, number]>(() => [0, 11.5, 10.5], []);
+
+  const mesonSlotsForTable = MESON_IDS.map((id) => {
+    const station = STATIONS.find((s) => s.id === id)!;
+    return { offsetX: station.x - MESON_TABLE_CENTER_X, item: snapshot.mesonSlots[id] };
+  });
 
   return (
     <div className="relative aspect-video w-full overflow-hidden rounded-xl border bg-black">
-      <Canvas shadows camera={{ position: cameraPosition, fov: 40 }}>
+      <Canvas shadows camera={{ position: cameraPosition, fov: 38 }}>
         <color attach="background" args={["#1b1330"]} />
         <FixedOverheadCamera />
         <ambientLight intensity={0.6} />
-        <directionalLight position={[4, 8, 4]} intensity={1.1} castShadow />
+        <directionalLight position={[4, 10, 4]} intensity={1.1} castShadow />
         <group>
           <KitchenFloor />
           <KitchenBorder />
-          <LettuceCrate />
-          <TomatoCrate />
-          <ChoppingBoard item={snapshot.board} chopProgress={snapshot.chopProgress} />
-          <AssemblyCounter slot={snapshot.mesonSlot} />
-          <Stove item={snapshot.stove} />
-          <PlateStack cleanPlates={snapshot.cleanPlates} />
-          <DeliveryWindow />
-          <Sink dirtyPlates={snapshot.dirtyPlates} washProgress={snapshot.washProgress} />
-          <TrashBin />
+          <LettuceCrate position={[-5, -4]} />
+          <TomatoCrate position={[-3, -4]} />
+          <ChoppingBoard
+            position={[-1, -4]}
+            label="Tabla 1"
+            item={snapshot.boards.tabla1}
+            chopProgress={snapshot.chopTargetId === "tabla1" ? snapshot.chopProgress : 0}
+          />
+          <ChoppingBoard
+            position={[1, -4]}
+            label="Tabla 2"
+            item={snapshot.boards.tabla2}
+            chopProgress={snapshot.chopTargetId === "tabla2" ? snapshot.chopProgress : 0}
+          />
+          <Stove position={[3, -4]} label="Estufa 1" item={snapshot.stoves.estufa1} />
+          <Stove position={[5, -4]} label="Estufa 2" item={snapshot.stoves.estufa2} />
+          <PlateStack position={[-5, 0]} cleanPlates={snapshot.cleanPlates} />
+          <Sink position={[-3, 0]} dirtyPlates={snapshot.dirtyPlates} washProgress={snapshot.washProgress} />
+          <TrashBin position={[-1, 0]} />
+          <AssemblyTable position={[MESON_TABLE_CENTER_X, 0]} width={MESON_TABLE_WIDTH} slots={mesonSlotsForTable} />
+          <DeliveryWindow position={[7, 0]} rotationY={-Math.PI / 2} />
           <ChefCharacter color="#ef4444" position={snapshot.position} facing={snapshot.facing} />
           <CarriedItem carrying={snapshot.carrying} position={snapshot.position} />
         </group>
